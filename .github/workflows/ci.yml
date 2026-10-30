@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install xcodegen
+        run: brew install xcodegen
+      - name: Build (arm64, ad-hoc)
+        run: |
+          xcodegen generate
+          xcodebuild -project MarkDownGo.xcodeproj -scheme MarkDownGo -configuration Release -derivedDataPath build ARCHS=arm64 CODE_SIGN_IDENTITY=- build
+          scripts/strip-and-sign.sh Release
+      - name: Test
+        run: xcodebuild -project MarkDownGo.xcodeproj -scheme MarkDownGo -configuration Debug -derivedDataPath build test
+      - name: Package dmg
+        run: scripts/make-dmg.sh "${GITHUB_REF_NAME#v}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MarkDownGo-dmg
+          path: dist/*.dmg
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: macos-15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - name: Build & package
+        run: |
+          xcodegen generate
+          xcodebuild -project MarkDownGo.xcodeproj -scheme MarkDownGo -configuration Release -derivedDataPath build ARCHS=arm64 CODE_SIGN_IDENTITY=- build
+          scripts/strip-and-sign.sh Release
+          scripts/make-dmg.sh "${GITHUB_REF_NAME#v}"
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.dmg
+          overwrite_files: true

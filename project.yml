@@ -1,0 +1,121 @@
+name: MarkDownGo
+options:
+  bundleIdPrefix: com.sparkconch
+  deploymentTarget:
+    macOS: "12.0"
+  createIntermediateGroups: true
+  minimumXcodeGenVersion: "2.38"
+  developmentLanguage: en
+
+packages:
+  SwiftCMark:
+    url: https://github.com/swiftlang/swift-cmark
+    from: 0.9.0
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MACOSX_DEPLOYMENT_TARGET: "12.0"
+    ARCHS: arm64
+    ONLY_ACTIVE_ARCH: YES
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGN_STYLE: Manual
+    DEVELOPMENT_TEAM: ""
+    ENABLE_HARDENED_RUNTIME: NO
+    SWIFT_STRICT_CONCURRENCY: minimal
+    DEAD_CODE_STRIPPING: YES
+
+targets:
+  MarkDownGoCore:
+    type: framework
+    platform: macOS
+    sources:
+      - path: MarkDownGo/Core
+    dependencies:
+      - package: SwiftCMark
+        product: cmark-gfm
+      - package: SwiftCMark
+        product: cmark-gfm-extensions
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.sparkconch.MarkDownGo.core
+        GENERATE_INFOPLIST_FILE: YES
+        SKIP_INSTALL: NO
+
+  MarkDownGo:
+    type: application
+    platform: macOS
+    sources:
+      - path: MarkDownGo/App
+      - path: MarkDownGo/Resources
+        excludes:
+          - "preview/**"
+      - path: MarkDownGo/Resources/preview
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - target: MarkDownGoCore
+      - sdk: WebKit.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.sparkconch.MarkDownGo
+        PRODUCT_NAME: MarkDownGo
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 1
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: MarkDownGo
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
+        INFOPLIST_KEY_NSHumanReadableCopyright: "GPL-3.0 · MarkDownGo contributors"
+        INFOPLIST_KEY_NSQuitAlwaysKeepsWindows: NO
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
+        COMBINE_HIDPI_IMAGES: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    info:
+      path: MarkDownGo/App/Info.plist
+      properties:
+        NSPrincipalClass: NSApplication
+        # 文档类型必须带 NSDocumentClass，否则 NSDocumentController 拿不到可创建的类，
+        # 新建会失败；同时用 CFBundleTypeExtensions 兜住 .md 被 LaunchServices 判成
+        # 其它类型（例如 Sega ROM 的 .md）的情况。
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Markdown Document
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Owner
+            NSDocumentClass: $(PRODUCT_MODULE_NAME).Document
+            LSItemContentTypes:
+              - net.daringfireball.markdown
+              - public.plain-text
+            CFBundleTypeExtensions: [md, markdown, mdown, mkd, mkdn]
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: net.daringfireball.markdown
+            UTTypeConformsTo: [public.plain-text]
+            UTTypeDescription: Markdown Document
+            UTTypeTagSpecification:
+              public.filename-extension: [md, markdown, mdown, mkd, mkdn]
+              public.mime-type: [text/markdown]
+
+  MarkDownGoTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: MarkDownGo/Tests
+    dependencies:
+      - target: MarkDownGoCore
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.sparkconch.MarkDownGo.tests
+
+schemes:
+  MarkDownGo:
+    build:
+      targets:
+        MarkDownGo: all
+        MarkDownGoTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: false
+      targets:
+        - MarkDownGoTests

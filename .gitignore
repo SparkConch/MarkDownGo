@@ -1,0 +1,15 @@
+.DS_Store
+build/
+dist/
+DerivedData/
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+.swiftpm/
+.build/
+
+# local design/decision log — not published
+SPEC.md
+
+# local reference artwork — not published
+design/img-*.svg
