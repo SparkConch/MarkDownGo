@@ -24,6 +24,10 @@ settings:
     ENABLE_HARDENED_RUNTIME: NO
     SWIFT_STRICT_CONCURRENCY: minimal
     DEAD_CODE_STRIPPING: YES
+  # DEBUG guards the smoke hook; Release builds must not contain it.
+  configs:
+    Debug:
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
 
 targets:
   MarkDownGoCore:
@@ -70,13 +74,21 @@ targets:
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
         COMBINE_HIDPI_IMAGES: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # Warnings are defects; keep the build honest (see SPEC §3 implementation notes).
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+        # Compile with relative source paths so Swift metadata cannot embed /Users/<you>/...;
+        # scripts/strip-and-sign.sh remains as the belt to this braces.
+        OTHER_SWIFT_FLAGS: "$(inherited) -file-compilation-dir $(SRCROOT)"
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
     info:
       path: MarkDownGo/App/Info.plist
       properties:
         NSPrincipalClass: NSApplication
-        # 文档类型必须带 NSDocumentClass，否则 NSDocumentController 拿不到可创建的类，
-        # 新建会失败；同时用 CFBundleTypeExtensions 兜住 .md 被 LaunchServices 判成
-        # 其它类型（例如 Sega ROM 的 .md）的情况。
+        # The document type must carry NSDocumentClass, otherwise NSDocumentController has no
+        # creatable class and "new document" fails. CFBundleTypeExtensions also catches .md files
+        # that LaunchServices would otherwise resolve to another owner (e.g. the Sega ROM .md).
         CFBundleDocumentTypes:
           - CFBundleTypeName: Markdown Document
             CFBundleTypeRole: Editor

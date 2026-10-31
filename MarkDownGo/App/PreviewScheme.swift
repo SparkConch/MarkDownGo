@@ -141,10 +141,6 @@ final class PreviewScheme: NSObject, WKURLSchemeHandler {
         window.webkit.messageHandlers.scroll.postMessage(window.currentScrollRatio());
       }
     }, { passive: true });
-    window.scrollToHeading = function (n) {
-      var el = document.getElementById('h-' + n);
-      if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 28, behavior: 'smooth' });
-    };
     </script>
     </body>
     </html>

@@ -10,19 +10,19 @@ final class DocumentWindowController: NSWindowController, NSToolbarDelegate {
     init(document: Document) {
         editor = EditorViewController(document: document)
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1180, height: 760),
+            contentRect: NSRect(origin: .zero, size: Layout.windowSize),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
-        window.minSize = NSSize(width: 900, height: 520)
+        window.minSize = Layout.windowMinSize
         super.init(window: window)
         // `document` is set by NSDocument.addWindowController — setting it here first makes that
         // call a no-op and the document ends up with zero window controllers (window never shows).
         window.contentViewController = editor
         // Assigning a contentViewController lets the view's fitting size win over contentRect;
         // pin the size back or the window collapses to the panes' minimum thicknesses.
-        window.setContentSize(NSSize(width: 1180, height: 760))
+        window.setContentSize(Layout.windowSize)
         editor.modeDidChange = { [weak self] mode in self?.modeControl?.selectedSegment = mode.rawValue }
 
         let toolbar = NSToolbar(identifier: "mdg.main")

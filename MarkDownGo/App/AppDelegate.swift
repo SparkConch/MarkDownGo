@@ -18,7 +18,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         applyAppearance()
         showHome(nil)
+        // Warm the WebContent process right after the launcher is up; the first document then
+        // starts its preview against a live process instead of paying process spawn latency.
+        DispatchQueue.main.async { PreviewPool.shared.prewarm() }
+        #if DEBUG
         runSmokeHook()
+        #endif
         NotificationCenter.default.addObserver(
             self, selector: #selector(preferencesChanged(_:)),
             name: Preferences.didChange, object: nil
@@ -39,17 +44,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Verification hook, inert unless `MDG_SMOKE` is set: creating and opening documents can only
+    #if DEBUG
+    /// Verification hook, inert unless `MDG_SMOKE` is set (and compiled out of Release builds): creating and opening documents can only
     /// be proven by launching the real app, so keep one way to drive it from a terminal.
     private func runSmokeHook() {
         let environment = ProcessInfo.processInfo.environment
         switch environment["MDG_SMOKE"] {
         case "layout":
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Layout.smokeLaunchDelay) {
                 _ = try? NSDocumentController.shared.openUntitledDocumentAndDisplay(true)
             }
         case "scroll":
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Layout.smokeLaunchDelay) {
                 guard let document = try? NSDocumentController.shared.openUntitledDocumentAndDisplay(true),
                       let controller = document.windowControllers.first as? DocumentWindowController else { return }
                 let long = (1...120).map { "## 标题 \($0)\n\n这是第 \($0) 段，用来验证源码与预览的滚动绑定。\n" }.joined(separator: "\n")
@@ -57,7 +63,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { controller.editor.debugScrollSmoke() }
             }
         case "new":
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Layout.smokeLaunchDelay) {
                 do {
                     let document = try NSDocumentController.shared.openUntitledDocumentAndDisplay(true)
                     FileHandle.standardError.write(Data("SMOKE new ok: \(document.displayName ?? "?")\n".utf8))
@@ -67,7 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         case "open":
             guard let path = environment["MDG_SMOKE_FILE"] else { return }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Layout.smokeLaunchDelay) {
                 NSDocumentController.shared.openDocument(withContentsOf: URL(fileURLWithPath: path), display: true) { document, _, error in
                     let message = error.map { "SMOKE open failed: \($0)\n" } ?? "SMOKE open ok: \(document?.displayName ?? "?")\n"
                     FileHandle.standardError.write(Data(message.utf8))
@@ -77,6 +83,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             break
         }
     }
+    #endif
 
     /// The launcher replaces the "untitled document on launch" habit (SPEC §4).
     func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool { false }

@@ -11,7 +11,7 @@ final class EditorViewController: NSSplitViewController, NSMenuItemValidation {
     private(set) var mode: Mode = .split
     private let document: Document
     private let editorView = EditorTextView()
-    private let preview = PreviewView()
+    private(set) var preview: PreviewView!
     private let outline = OutlineViewController()
     private let scrollView = NSScrollView()
     private var lastEditorScrollAt = Date.distantPast
@@ -29,6 +29,7 @@ final class EditorViewController: NSSplitViewController, NSMenuItemValidation {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        preview = PreviewPool.shared.take()
         editorView.setMarkdown(document.text)
         preview.update(markdown: document.text)
         outline.reload(Outline.headings(in: editorView.string, styled: editorView.styled))
@@ -59,7 +60,7 @@ final class EditorViewController: NSSplitViewController, NSMenuItemValidation {
         )
         preview.onScroll = { [weak self] ratio in
             guard let self, self.mode == .split else { return }
-            guard Date().timeIntervalSince(self.lastEditorScrollAt) > 0.15 else { return }
+            guard Date().timeIntervalSince(self.lastEditorScrollAt) > Layout.scrollGuard else { return }
             self.lastPreviewScrollAt = Date()
             self.editorView.scrollToRatio(ratio)
         }
@@ -113,8 +114,8 @@ final class EditorViewController: NSSplitViewController, NSMenuItemValidation {
             positioned = true
             let width = view.bounds.width
             // Divider 0 ends the outline; divider 1 ends the editor (56% of the remainder).
-            splitView.setPosition(200, ofDividerAt: 0)
-            splitView.setPosition(200 + (width - 200) * 0.56, ofDividerAt: 1)
+            splitView.setPosition(Layout.outlineWidth, ofDividerAt: 0)
+            splitView.setPosition(Layout.outlineWidth + (width - Layout.outlineWidth) * Layout.editorShare, ofDividerAt: 1)
         }
     }
 
@@ -152,7 +153,7 @@ final class EditorViewController: NSSplitViewController, NSMenuItemValidation {
 
     private func scheduleRefresh(_ text: String) {
         debounce?.invalidate()
-        debounce = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: false) { [weak self] _ in
+        debounce = Timer.scheduledTimer(withTimeInterval: Layout.previewDebounce, repeats: false) { [weak self] _ in
             guard let self else { return }
             self.preview.update(markdown: text)
             self.outline.reload(Outline.headings(in: self.editorView.string, styled: self.editorView.styled))
@@ -172,11 +173,12 @@ final class EditorViewController: NSSplitViewController, NSMenuItemValidation {
 
     @objc private func editorDidScroll(_ note: Notification) {
         guard mode == .split else { return }
-        guard Date().timeIntervalSince(lastPreviewScrollAt) > 0.15 else { return }
+        guard Date().timeIntervalSince(lastPreviewScrollAt) > Layout.scrollGuard else { return }
         lastEditorScrollAt = Date()
         preview.scrollToRatio(editorView.scrollRatio)
     }
 
+    #if DEBUG
     /// MDG_SMOKE=scroll: prove the binding numerically (no screenshots needed).
     func debugScrollSmoke() {
         editorView.scrollToRatio(0.5)
@@ -191,6 +193,7 @@ final class EditorViewController: NSSplitViewController, NSMenuItemValidation {
             }
         }
     }
+    #endif
 
     // MARK: - Menu validation
 
