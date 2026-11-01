@@ -6,7 +6,7 @@
      ink centroid (MARK_DY). -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
   <g transform="translate(512 512) scale(0.8046875) translate(-512 -512)">
-    <g transform="translate(0 90.84)">
+    <g transform="translate(0 25.0)">
       <path fill="#0B0B0A" d="M232 183 L392 183 L512 343 L632 183 L792 183 L792 632 L692 632 L692 262 L512 502 L332 262 L332 632 L232 632 Z"/>
       <rect x="468.0" y="443.3" width="88" height="196.7" fill="#0B0B0A"/>
       <polygon points="392,632 632,632 512,792" fill="#0B0B0A"/>

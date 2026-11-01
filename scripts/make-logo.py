@@ -14,10 +14,14 @@ GRID = 1024
 ART = 824
 MARK_SCALE = ART / GRID   # 0.8046875
 
-# Optical centring: the mark's ink centroid at dy=0 sits at y=438.9 (canvas space, measured by
-# scripts/measure-mark-centroid.sh); MARK_DY lifts it in mark-space so the centroid lands on the
-# plate centre (512). Re-run the measure script if the geometry ever changes.
-MARK_DY = 90.84
+# Optical centring, solved by measurement (2026-11-01): equal-area centroid is the WRONG target
+# for this glyph — the arrow-head triangle is far denser than the crown, so centroid-centring
+# pushes the mark against the plate's bottom (gaps 220/114) and reads as "sinking". The perceived
+# balance follows the bounding box instead: at MARK_DY=0 gaps are 147/187 (high), each +1 of dy
+# moves the mark down 0.80 canvas px and shifts the gap delta by 1.6, so equal gaps land at
+# MARK_DY = 25.0 → gaps 167/167. Re-solve empirically (render, measure, interpolate) if the
+# geometry changes; do not "fix" the centroid being ~470 afterwards — that is expected.
+MARK_DY = 25.0
 
 # Mark geometry (congruent triangles, seamless shaft join) in mark-space.
 T = 183.0

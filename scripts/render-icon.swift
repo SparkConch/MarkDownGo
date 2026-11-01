@@ -10,6 +10,11 @@
 // the mark on top clipped to the plate silhouette. Pixel access goes through CoreGraphics buffers —
 // NSBitmapImageRep.colorAt chokes on the template PNGs' colour space.
 //
+// Shadow fidelity: the template's `512@2x: Shadow` layer is NORMAL blend at opacity 77/255 (30.2%).
+// The exported official-shadow.png already carries that opacity baked into its alpha ramp
+// (max 77), and it is drawn as-is (source-over = NORMAL) — i.e. an exact replication of the
+// template's shadow, no invented blur or alpha.
+//
 // usage: render-icon <logo.svg> <out.png> <px> [official]
 import AppKit
 import ImageIO
