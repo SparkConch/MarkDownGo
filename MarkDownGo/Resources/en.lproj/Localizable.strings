@@ -57,3 +57,6 @@
 "settings.appearance.system" = "System";
 "settings.appearance.light" = "Light";
 "settings.appearance.dark" = "Dark";
+
+"settings.language.en" = "English";
+"settings.language.zh-Hans" = "中文";

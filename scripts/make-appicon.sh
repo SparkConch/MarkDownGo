@@ -10,8 +10,10 @@ rm -f "$SET"/*.png
 
 # size:filename:idiom-scale pairs (macOS icon matrix)
 while IFS=: read -r px file; do
-  # macOS 11 icon grid: artwork occupies 824 of the 1024 canvas, centred.
-  swift "$ROOT/scripts/render-icon.swift" "$SVG" "$SET/$file" "$px" 0.09765625 > /dev/null
+  # The SVG already carries Apple's macOS 11 grid (824 of 1024, radius 185.4, squircle), so no
+  # extra inset here; the renderer only adds the template drop shadow.
+  python3 "$ROOT/scripts/make-logo.py" > /dev/null
+  swift "$ROOT/scripts/render-icon.swift" "$SVG" "$SET/$file" "$px" 0 shadow > /dev/null
 done <<'SIZES'
 16:icon_16x16.png
 32:icon_16x16@2x.png

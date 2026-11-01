@@ -57,3 +57,6 @@
 "settings.appearance.system" = "跟随系统";
 "settings.appearance.light" = "浅色";
 "settings.appearance.dark" = "深色";
+
+"settings.language.en" = "English";
+"settings.language.zh-Hans" = "中文";

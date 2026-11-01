@@ -32,6 +32,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func preferencesChanged(_ note: Notification) {
         applyAppearance()
+        // Menus and every open window re-read their strings; no relaunch.
+        NSApp.mainMenu = MainMenu.build()
+        for window in NSApp.windows {
+            (window.windowController as? DocumentWindowController)?.refreshLocalization()
+        }
     }
 
     /// One switch covers every window, the launcher, and the preview (WKWebView follows
@@ -62,6 +67,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 controller.editor.replaceText(long)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { controller.editor.debugScrollSmoke() }
             }
+        case "lang":
+            DispatchQueue.main.asyncAfter(deadline: .now() + Layout.smokeLaunchDelay) {
+                func report(_ tag: String) {
+                    let fileMenu = NSApp.mainMenu?.items.first { $0.submenu?.items.contains { $0.keyEquivalent == "o" } == true }
+                    let openItem = fileMenu?.submenu?.items.first { $0.keyEquivalent == "o" }?.title ?? "?"
+                    let viewMenu = NSApp.mainMenu?.items.first { $0.submenu?.items.contains { $0.keyEquivalent == "1" } == true }
+                    let modeItem = viewMenu?.submenu?.items.first { $0.keyEquivalent == "2" }?.title ?? "?"
+                    FileHandle.standardError.write(Data("SMOKE lang \(tag): open=\(openItem) split=\(modeItem) home=\(Localization.string("home.open"))\n".utf8))
+                }
+                UserDefaults.standard.set(InterfaceLanguage.english.rawValue, forKey: PreferenceKey.language)
+                Preferences.notifyChanged()
+                report("en")
+                UserDefaults.standard.set(InterfaceLanguage.chinese.rawValue, forKey: PreferenceKey.language)
+                Preferences.notifyChanged()
+                report("zh")
+            }
         case "new":
             DispatchQueue.main.asyncAfter(deadline: .now() + Layout.smokeLaunchDelay) {
                 do {
@@ -88,6 +109,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The launcher replaces the "untitled document on launch" habit (SPEC §4).
     func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool { false }
 
+    // Launch always starts at the launcher: no window/state restoration, so a document left open
+    // in a previous session is never reopened behind the user's back.
+    func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { false }
+    func applicationShouldRestoreApplicationState(_ coder: NSCoder) -> Bool { false }
+    func applicationShouldSaveApplicationState(_ coder: NSCoder) -> Bool { false }
+
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if !flag { showHome(nil) }
         return true
@@ -99,6 +126,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             window.title = "MarkDownGo"
             window.styleMask = [.titled, .closable]
             window.isReleasedWhenClosed = false
+            window.isRestorable = false
             window.isMovableByWindowBackground = true
             window.center()
             homeWindow = window
@@ -112,6 +140,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             window.title = L("menu.settings")
             window.styleMask = [.titled, .closable]
             window.isReleasedWhenClosed = false
+            window.isRestorable = false
             window.center()
             settingsWindow = window
         }

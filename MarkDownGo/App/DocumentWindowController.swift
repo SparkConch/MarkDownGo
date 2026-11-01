@@ -16,6 +16,7 @@ final class DocumentWindowController: NSWindowController, NSToolbarDelegate {
             defer: false
         )
         window.minSize = Layout.windowMinSize
+        window.isRestorable = false
         super.init(window: window)
         // `document` is set by NSDocument.addWindowController — setting it here first makes that
         // call a no-op and the document ends up with zero window controllers (window never shows).
@@ -25,12 +26,21 @@ final class DocumentWindowController: NSWindowController, NSToolbarDelegate {
         window.setContentSize(Layout.windowSize)
         editor.modeDidChange = { [weak self] mode in self?.modeControl?.selectedSegment = mode.rawValue }
 
+        window.toolbarStyle = .unified
+        window.toolbar = makeToolbar()
+    }
+
+    /// Rebuilds the toolbar so its labels follow the language setting without a relaunch.
+    func refreshLocalization() {
+        window?.toolbar = makeToolbar()
+    }
+
+    private func makeToolbar() -> NSToolbar {
         let toolbar = NSToolbar(identifier: "mdg.main")
         toolbar.delegate = self
         toolbar.displayMode = .iconOnly
         toolbar.allowsUserCustomization = false
-        window.toolbarStyle = .unified
-        window.toolbar = toolbar
+        return toolbar
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }

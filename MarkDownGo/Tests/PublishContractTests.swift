@@ -85,6 +85,35 @@ final class PublishContractTests: XCTestCase {
         XCTAssertTrue(project.contains("NSDocumentClass"), "without it, new-document fails")
     }
 
+    // MARK: - Localization
+
+    func testLocalizationKeysAreInParity() throws {
+        func keys(_ path: String) throws -> Set<String> {
+            let body = try read(path)
+            var found = Set<String>()
+            for line in body.split(separator: "\n") where line.hasPrefix("\"") {
+                if let end = line.dropFirst().firstIndex(of: "\"") {
+                    found.insert(String(line.dropFirst().prefix(upTo: end)))
+                }
+            }
+            return found
+        }
+        let en = try keys("MarkDownGo/Resources/en.lproj/Localizable.strings")
+        let zh = try keys("MarkDownGo/Resources/zh-Hans.lproj/Localizable.strings")
+        XCTAssertFalse(en.isEmpty)
+        XCTAssertEqual(en.symmetricDifference(zh).sorted(), [], "untranslated keys drift between languages")
+    }
+
+    // MARK: - Icon grid
+
+    func testIconFollowsTheMacOS11Grid() throws {
+        // Apple's macOS icon grid: 1024 canvas, 824 body centred, corner radius 185.4, squircle.
+        let svg = try read("design/logo.svg")
+        XCTAssertTrue(svg.contains("185.4000"), "corner radius must be 185.4 (macOS 11 grid)")
+        XCTAssertTrue(svg.contains("824") || svg.contains("100"), "body must be 824 centred at 100")
+        XCTAssertFalse(svg.contains("<rect x=\"0\""), "the plate must not be full-bleed")
+    }
+
     // MARK: - Publish boundary
 
     func testScaffoldFilesAreNotTracked() throws {

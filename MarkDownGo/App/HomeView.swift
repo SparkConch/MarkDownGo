@@ -7,6 +7,7 @@ import SwiftUI
 struct HomeView: View {
     @State private var recents: [URL] = []
     @State private var hovered: URL?
+    @State private var revision = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -48,6 +49,11 @@ struct HomeView: View {
         .frame(width: 520, height: 456, alignment: .topLeading)
         .background(Palette.canvas)
         .onAppear(perform: reload)
+        .id(revision)
+        .onReceive(NotificationCenter.default.publisher(for: Preferences.didChange)) { _ in
+            revision += 1
+            reload()
+        }
     }
 
     // MARK: - Pieces
