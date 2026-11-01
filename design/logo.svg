@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- MarkDownGo mark (foreground only). The plate and drop shadow are Apple's official
-     macOS icon template layers (design/official-plate.png, design/official-shadow.png),
-     composited by scripts/render-icon.swift. Congruent 240x160 apex-down triangles, shaft
-     overlapping the head by 8px to avoid an antialiasing seam, optically centred by measured
-     ink centroid (MARK_DY). -->
+<!-- MarkDownGo mark. Standard artwork, used from 64px up.
+     The plate and drop shadow are Apple's official macOS icon template layers
+     (design/official-plate.png, design/official-shadow.png), composited by scripts/render-icon.swift.
+     The mark is balanced by bounding box (equal gaps inside the plate), not by ink centroid. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
   <g transform="translate(512 512) scale(0.8046875) translate(-512 -512)">
     <g transform="translate(0 25.0)">

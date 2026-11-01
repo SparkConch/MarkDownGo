@@ -16,6 +16,8 @@
 // template's shadow, no invented blur or alpha.
 //
 // usage: render-icon <logo.svg> <out.png> <px> [official]
+// The mark source is chosen by size: design/logo-small.svg at 16/32px, design/logo.svg above —
+// redrawn, not scaled (Apple's own small icons are separate drawings too).
 import AppKit
 import ImageIO
 import UniformTypeIdentifiers
@@ -41,15 +43,35 @@ func loadCGImage(_ url: URL) -> CGImage? {
     }
 }
 
+// Small sizes need their own treatment, not a miniature of the 1024 artwork:
+//  · supersample so the 824-unit plate lands on whole pixels (16px → ×8, 32px → ×4, 64px → ×2),
+//    then box-down once — a direct 824→12.875px draw is what made 16px look smeared;
+//  · no drop shadow below 64px: the template's blur is sub-pixel there and only adds a grey fringe
+//    (Apple's own 16/32px icons show no perceptible shadow either);
+//  · slight artwork enlargement at 16/32px so the strokes stay legible.
+let smallSize = pixels <= 64
+let workFactor: Int = {
+    var k = 1
+    while (824.0 * Double(pixels * k) / 1024.0).truncatingRemainder(dividingBy: 1) != 0 || pixels * k < 103 {
+        k *= 2
+        if k > 16 { break }
+    }
+    return k
+}()
+let workPixels = pixels * workFactor
+let artworkBoost: Double = pixels <= 16 ? 1.10 : (pixels <= 32 ? 1.05 : 1.0)
+
 let cs = CGColorSpace(name: CGColorSpace.sRGB)!
-let ctx = CGContext(data: nil, width: pixels, height: pixels, bitsPerComponent: 8,
-                    bytesPerRow: pixels * 4, space: cs,
-                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-let unit = Double(pixels) / 1024.0
+let work = CGContext(data: nil, width: workPixels, height: workPixels, bitsPerComponent: 8,
+                     bytesPerRow: workPixels * 4, space: cs,
+                     bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+let ctx = work
+let unit = Double(workPixels) / 1024.0
 
 if official {
     // 1) Official drop shadow at its template position (70, 87 top-down → y-flipped here).
-    if let shadow = loadCGImage(designURL("official-shadow.png")) {
+    //    Below 64px the template blur is sub-pixel and reads as grey haze, so it is skipped.
+    if !smallSize, let shadow = loadCGImage(designURL("official-shadow.png")) {
         ctx.draw(shadow, in: CGRect(x: 70 * unit, y: (1024 - 87 - 878) * unit,
                                     width: 878 * unit, height: 878 * unit))
     }
@@ -81,18 +103,22 @@ if official {
         }
 
         // 3) The mark, clipped to the plate silhouette.
-        if let mark = renderMark(svgPath: svgPath, size: pixels) {
+        // Small sizes use the dedicated drawing (logo-small.svg), selected by target pixels.
+        let markSource = smallSize ? designURL("logo-small.svg") : URL(fileURLWithPath: svgPath)
+        if let mark = renderMark(svgPath: markSource.path, size: workPixels) {
             if let plateMask = alphaMask(plate, side: plate.width) {
-                let scaled = CGContext(data: nil, width: pixels, height: pixels, bitsPerComponent: 8,
-                                       bytesPerRow: pixels * 4, space: cs,
+                let scaled = CGContext(data: nil, width: workPixels, height: workPixels, bitsPerComponent: 8,
+                                       bytesPerRow: workPixels * 4, space: cs,
                                        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
                 scaled.interpolationQuality = .high
-                scaled.draw(plateMask, in: CGRect(x: 0, y: 0, width: pixels, height: pixels))
+                scaled.draw(plateMask, in: CGRect(x: 0, y: 0, width: workPixels, height: workPixels))
                 if let mask = scaled.makeImage() {
-                    ctx.clip(to: CGRect(x: 0, y: 0, width: pixels, height: pixels), mask: mask)
+                    ctx.clip(to: CGRect(x: 0, y: 0, width: workPixels, height: workPixels), mask: mask)
                 }
             }
-            ctx.draw(mark, in: CGRect(x: 0, y: 0, width: Double(pixels), height: Double(pixels)))
+            let side = Double(workPixels) * artworkBoost
+            let origin = (Double(workPixels) - side) / 2
+            ctx.draw(mark, in: CGRect(x: origin, y: origin, width: side, height: side))
         }
     }
 } else {
@@ -101,12 +127,21 @@ if official {
     }
 }
 
-// Write out through ImageIO (colour space clean, no NSBitmapImageRep involvement).
+// Box-down the supersampled canvas to the target size in one high-quality step.
+let final: CGImage = {
+    guard workFactor > 1, let source = work.makeImage() else { return work.makeImage()! }
+    let ctx = CGContext(data: nil, width: pixels, height: pixels, bitsPerComponent: 8,
+                        bytesPerRow: pixels * 4, space: cs,
+                        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+    ctx.interpolationQuality = .high
+    ctx.draw(source, in: CGRect(x: 0, y: 0, width: pixels, height: pixels))
+    return ctx.makeImage()!
+}()
 let out = CGImageDestinationCreateWithURL(URL(fileURLWithPath: outPath) as CFURL,
                                           UTType.png.identifier as CFString, 1, nil)!
-CGImageDestinationAddImage(out, ctx.makeImage()!, nil)
+CGImageDestinationAddImage(out, final, nil)
 CGImageDestinationFinalize(out)
-print("wrote \(outPath) \(pixels)x\(pixels)\(official ? " (official template)" : "")")
+print("wrote \(outPath) \(pixels)x\(pixels)\(official ? " (official template, supersample ×\(workFactor)\(smallSize ? ", small-size rules" : ""))" : "")")
 
 // MARK: - Mark rendering (SVG needs AppKit)
 

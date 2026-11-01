@@ -116,6 +116,13 @@ final class PublishContractTests: XCTestCase {
         XCTAssertGreaterThan(shadow.count, 1_000, "official shadow missing or truncated")
         let svg = try read("design/logo.svg")
         XCTAssertTrue(svg.contains("<svg"), "mark source must exist")
+
+        // Small sizes need their own drawing; scaling the 1024 artwork down turns 16px into mush.
+        let small = try read("design/logo-small.svg")
+        XCTAssertTrue(small.contains("<svg"))
+        let renderer = try read("scripts/render-icon.swift")
+        XCTAssertTrue(renderer.contains("logo-small.svg"), "renderer must switch to the small artwork")
+        XCTAssertTrue(renderer.contains("smallSize"), "renderer must special-case small sizes")
     }
 
     // MARK: - Publish boundary
