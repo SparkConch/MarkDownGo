@@ -1,14 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- MarkDownGo icon master. Apple macOS 11 grid: 1024 canvas, 824 squircle centred,
-     corner radius 185.4 with continuous curvature (smoothing 0.7), template drop shadow added by
-     scripts/render-icon.swift. The notch and the arrow head are congruent 240x160 apex-down
-     triangles on the same centre line; the shaft meets the V underside flush and overlaps the head
-     by 8px so no antialiasing seam shows. The mark is centred by measured area centroid. -->
+<!-- MarkDownGo mark (foreground only). The plate and drop shadow are Apple's official
+     macOS icon template layers (design/official-plate.png, design/official-shadow.png),
+     composited by scripts/render-icon.swift. Congruent 240x160 apex-down triangles, shaft
+     overlapping the head by 8px to avoid an antialiasing seam, optically centred by measured
+     ink centroid (MARK_DY). -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-  <path d="M 608.8200 100.0000 c 121.3788 0 182.0682 0 226.6512 27.3205 a 185.4000 185.4000 0 0 1 61.2083 61.2083 c 27.3205 44.5830 27.3205 105.2724 27.3205 226.6512 L 924.0000 608.8200 c 0 121.3788 0 182.0682 -27.3205 226.6512 a 185.4000 185.4000 0 0 1 -61.2083 61.2083 c -44.5830 27.3205 -105.2724 27.3205 -226.6512 27.3205 L 415.1800 924.0000 c -121.3788 0 -182.0682 0 -226.6512 -27.3205 a 185.4000 185.4000 0 0 1 -61.2083 -61.2083 c -27.3205 -44.5830 -27.3205 -105.2724 -27.3205 -226.6512 L 100.0000 415.1800 c 0 -121.3788 0 -182.0682 27.3205 -226.6512 a 185.4000 185.4000 0 0 1 61.2083 -61.2083 c 44.5830 -27.3205 105.2724 -27.3205 226.6512 -27.3205 Z" fill="#F6F2EA"/>
   <g transform="translate(512 512) scale(0.8046875) translate(-512 -512)">
-    <path fill="#0B0B0A" d="M232 183 L392 183 L512 343 L632 183 L792 183 L792 632 L692 632 L692 262 L512 502 L332 262 L332 632 L232 632 Z"/>
-    <rect x="468.0" y="443.3" width="88" height="196.7" fill="#0B0B0A"/>
-    <polygon points="392,632 632,632 512,792" fill="#0B0B0A"/>
+    <g transform="translate(0 90.84)">
+      <path fill="#0B0B0A" d="M232 183 L392 183 L512 343 L632 183 L792 183 L792 632 L692 632 L692 262 L512 502 L332 262 L332 632 L232 632 Z"/>
+      <rect x="468.0" y="443.3" width="88" height="196.7" fill="#0B0B0A"/>
+      <polygon points="392,632 632,632 512,792" fill="#0B0B0A"/>
+    </g>
   </g>
 </svg>

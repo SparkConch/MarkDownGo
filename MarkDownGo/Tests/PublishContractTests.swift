@@ -104,14 +104,18 @@ final class PublishContractTests: XCTestCase {
         XCTAssertEqual(en.symmetricDifference(zh).sorted(), [], "untranslated keys drift between languages")
     }
 
-    // MARK: - Icon grid
+    // MARK: - Icon (Apple's official macOS template)
 
-    func testIconFollowsTheMacOS11Grid() throws {
-        // Apple's macOS icon grid: 1024 canvas, 824 body centred, corner radius 185.4, squircle.
+    /// The official template layers, extracted from `macOS 圆角图标模板.psd` via psd-tools:
+    /// `512@2x` (824x824 plate) and `512@2x: Shadow` (878x878). The renderer composites
+    /// shadow → tinted plate → mark, all clipped to the official silhouette.
+    func testOfficialTemplateAssetsExist() throws {
+        let plate = try Data(contentsOf: repoRoot.appendingPathComponent("design/official-plate.png"))
+        let shadow = try Data(contentsOf: repoRoot.appendingPathComponent("design/official-shadow.png"))
+        XCTAssertGreaterThan(plate.count, 1_000, "official plate missing or truncated")
+        XCTAssertGreaterThan(shadow.count, 1_000, "official shadow missing or truncated")
         let svg = try read("design/logo.svg")
-        XCTAssertTrue(svg.contains("185.4000"), "corner radius must be 185.4 (macOS 11 grid)")
-        XCTAssertTrue(svg.contains("824") || svg.contains("100"), "body must be 824 centred at 100")
-        XCTAssertFalse(svg.contains("<rect x=\"0\""), "the plate must not be full-bleed")
+        XCTAssertTrue(svg.contains("<svg"), "mark source must exist")
     }
 
     // MARK: - Publish boundary
