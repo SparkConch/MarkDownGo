@@ -8,24 +8,24 @@ private let log = Logger(subsystem: "com.sparkconch.MarkDownGo.quicklook", categ
 
 /// Finder preview for Markdown files.
 ///
-/// Three rules, learned the hard way:
+/// Four rules, each one cost a debugging session:
 ///  1. **Never show a blank panel.** Every failure path ends in visible text (error message, or the
 ///     raw source). A blank QuickLook window tells the user nothing and looks like a broken app.
-///  2. **Read the file with a security-scoped bookmark.** A sandboxed extension only gets a
+///  2. **Read the file with a security-scoped URL.** A sandboxed extension only gets a
 ///     security-scoped URL from QuickLook; without `startAccessingSecurityScopedResource` the read
 ///     fails and the panel stays empty.
-///  3. **Do not depend on a custom URL scheme inside the extension.** `WKURLSchemeHandler` behaves
-///     inconsistently in an appex; loading the shell with `loadHTMLString(_:baseURL:)` pointed at
-///     the bundle's resource directory keeps KaTeX/Mermaid/fonts working through plain file URLs,
-///     which the sandbox allows for our own bundle.
+///  3. **Lay out with frames and autoresizing, not Auto Layout**, and give every scroll view its
+///     frame *before* asking for `contentSize`. The host resizes this view after
+///     `preparePreviewOfFile` returns, and a child sized from a zero-frame scroll view draws nothing.
+///  4. **WebKit needs `com.apple.security.network.client`** even for local HTML — without it the web
+///     view never commits a load inside the `quicklook-preview` sandbox and the panel stays blank
+///     (see MarkDownGoQuickLook.entitlements).
 final class PreviewProvider: NSViewController, QLPreviewingController {
     private var contentView: NSView?
 
     // MARK: - QLPreviewingController
 
     func preparePreviewOfFile(at url: URL, completionHandler handler: @escaping (Error?) -> Void) {
-        // QuickLook hands us a security-scoped URL; reading without this returns nothing (empty
-        // panel) even though the file plainly exists.
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
 
@@ -34,7 +34,7 @@ final class PreviewProvider: NSViewController, QLPreviewingController {
             data = try Data(contentsOf: url)
         } catch {
             log.notice("read failed: \(url.lastPathComponent, privacy: .public) — \(error.localizedDescription, privacy: .public)")
-            showMessage("MarkDownGo 无法读取这个文件\n\n\(error.localizedDescription)", monospaced: false)
+            showMessage("MarkDownGo 无法读取这个文件\n\n\(error.localizedDescription)")
             handler(nil)
             return
         }
@@ -48,7 +48,7 @@ final class PreviewProvider: NSViewController, QLPreviewingController {
 
         switch mode {
         case .code:
-            showSource(text, fileName: url.lastPathComponent)
+            showSource(text)
         case .rendered:
             showRendered(text, theme: theme)
         }
@@ -57,29 +57,36 @@ final class PreviewProvider: NSViewController, QLPreviewingController {
 
     // MARK: - Code mode
 
-    private func showSource(_ text: String, fileName: String) {
-        let scroll = NSScrollView()
-        let textView = NSTextView()
-        textView.string = text
-        textView.font = .monospacedSystemFont(ofSize: 12.5, weight: .regular)
-        textView.textColor = .textColor
-        textView.backgroundColor = .textBackgroundColor
-        textView.isEditable = false
-        textView.isSelectable = true
-        textView.drawsBackground = true
-        textView.textContainerInset = NSSize(width: 14, height: 12)
-        textView.isVerticallyResizable = true
-        textView.isHorizontallyResizable = false
-        textView.textContainer?.widthTracksTextView = true
-        textView.minSize = NSSize(width: 0, height: 0)
-        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude,
-                                  height: CGFloat.greatestFiniteMagnitude)
-
-        scroll.documentView = textView
+    private func showSource(_ text: String) {
+        // Frame first: `contentSize` is meaningless until the scroll view has bounds.
+        let scroll = NSScrollView(frame: view.bounds)
+        scroll.autoresizingMask = [.width, .height]
         scroll.hasVerticalScroller = true
         scroll.autohidesScrollers = true
         scroll.drawsBackground = true
         scroll.backgroundColor = .textBackgroundColor
+
+        let contentSize = scroll.contentSize
+        let textView = NSTextView(frame: NSRect(origin: .zero, size: contentSize))
+        textView.string = text
+        textView.font = .monospacedSystemFont(ofSize: 12.5, weight: .regular)
+        textView.textColor = .textColor
+        textView.backgroundColor = .textBackgroundColor
+        textView.drawsBackground = true
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.textContainerInset = NSSize(width: 14, height: 12)
+        textView.minSize = NSSize(width: 0, height: contentSize.height)
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude,
+                                  height: CGFloat.greatestFiniteMagnitude)
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.autoresizingMask = [.width]
+        textView.textContainer?.containerSize = NSSize(width: contentSize.width,
+                                                      height: CGFloat.greatestFiniteMagnitude)
+        textView.textContainer?.widthTracksTextView = true
+
+        scroll.documentView = textView
         install(scroll)
     }
 
@@ -137,7 +144,8 @@ final class PreviewProvider: NSViewController, QLPreviewingController {
         </html>
         """
 
-        let web = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        let web = WKWebView(frame: view.bounds, configuration: WKWebViewConfiguration())
+        web.autoresizingMask = [.width, .height]
         web.setValue(false, forKey: "drawsBackground")
         web.loadHTMLString(html, baseURL: base)
         install(web)
@@ -146,44 +154,41 @@ final class PreviewProvider: NSViewController, QLPreviewingController {
 
     // MARK: - Fallback
 
-    private func showMessage(_ message: String, monospaced: Bool) {
-        let scroll = NSScrollView()
-        let textView = NSTextView()
-        textView.string = message
-        textView.font = monospaced
-            ? .monospacedSystemFont(ofSize: 12.5, weight: .regular)
-            : .systemFont(ofSize: 13)
-        textView.textColor = .secondaryLabelColor
-        textView.isEditable = false
-        textView.textContainerInset = NSSize(width: 20, height: 18)
-        textView.isVerticallyResizable = true
-        textView.textContainer?.widthTracksTextView = true
-        scroll.documentView = textView
+    private func showMessage(_ message: String) {
+        let scroll = NSScrollView(frame: view.bounds)
+        scroll.autoresizingMask = [.width, .height]
         scroll.hasVerticalScroller = true
         scroll.drawsBackground = true
         scroll.backgroundColor = .textBackgroundColor
+
+        let contentSize = scroll.contentSize
+        let textView = NSTextView(frame: NSRect(origin: .zero, size: contentSize))
+        textView.string = message
+        textView.font = .systemFont(ofSize: 13)
+        textView.textColor = .secondaryLabelColor
+        textView.backgroundColor = .textBackgroundColor
+        textView.drawsBackground = true
+        textView.isEditable = false
+        textView.textContainerInset = NSSize(width: 20, height: 18)
+        textView.isVerticallyResizable = true
+        textView.autoresizingMask = [.width]
+        textView.textContainer?.widthTracksTextView = true
+
+        scroll.documentView = textView
         install(scroll)
     }
 
     // MARK: - Hosting
 
-    /// Auto Layout, not frames: the QuickLook host resizes this view after `preparePreviewOfFile`
-    /// returns, and a frame captured earlier collapses to nothing (a blank panel).
     private func install(_ child: NSView) {
         contentView?.removeFromSuperview()
-        child.translatesAutoresizingMaskIntoConstraints = false
+        child.frame = view.bounds
+        child.autoresizingMask = [.width, .height]
         view.addSubview(child)
-        NSLayoutConstraint.activate([
-            child.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            child.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            child.topAnchor.constraint(equalTo: view.topAnchor),
-            child.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-        ])
         contentView = child
-        // Hosts that ignore Auto Layout sizing fall back to this; without it some panels open at
-        // zero height and look empty.
         preferredContentSize = NSSize(width: 820, height: 600)
-        log.notice("installed \(String(describing: type(of: child)), privacy: .public) in \(NSStringFromRect(self.view.frame), privacy: .public)")
+        let size = NSStringFromRect(view.bounds)
+        log.notice("installed \(String(describing: type(of: child)), privacy: .public) in \(size, privacy: .public)")
     }
 
     override func loadView() {
