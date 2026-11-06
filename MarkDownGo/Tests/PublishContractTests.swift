@@ -106,32 +106,13 @@ final class PublishContractTests: XCTestCase {
 
     // MARK: - Icon (Apple's official macOS template)
 
-    /// The official template layers, extracted from `macOS 圆角图标模板.psd` via psd-tools:
-    /// `512@2x` (824x824 plate) and `512@2x: Shadow` (878x878). The renderer composites
-    /// shadow → tinted plate → mark, all clipped to the official silhouette.
-    func testOfficialTemplateAssetsExist() throws {
-        let plate = try Data(contentsOf: repoRoot.appendingPathComponent("design/official-plate.png"))
-        let shadow = try Data(contentsOf: repoRoot.appendingPathComponent("design/official-shadow.png"))
-        XCTAssertGreaterThan(plate.count, 1_000, "official plate missing or truncated")
-        XCTAssertGreaterThan(shadow.count, 1_000, "official shadow missing or truncated")
-        let svg = try read("design/logo.svg")
-        XCTAssertTrue(svg.contains("<svg"), "mark source must exist")
-
-        // Small sizes need their own drawing; scaling the 1024 artwork down turns 16px into mush.
-        let small = try read("design/logo-small.svg")
-        XCTAssertTrue(small.contains("<svg"))
-        // The small artwork must equal the standard M/arrow geometry (only shaft/arrow heavier),
-        // otherwise a separate drawing can silently drift into a completely different mark.
-        let standard = try read("design/logo.svg")
-        let mPath = "M232 183 L392 183 L512 343 L632 183 L792 183 L792 632"
-        XCTAssertTrue(standard.contains(mPath), "standard M geometry changed")
-        XCTAssertTrue(small.contains(mPath), "small artwork must keep the standard M geometry")
-        let renderer = try read("scripts/render-icon.swift")
-        XCTAssertTrue(renderer.contains("smallSize"), "renderer must special-case small sizes")
-        XCTAssertFalse(renderer.contains("designURL(\"logo-small.svg\")"),
-                       "renderer must honour its SVG argument, not hard-code the small artwork")
+    /// The icon master is the author's hand-made 1024 PNG; the pipeline only scales it down.
+    func testIconMasterExists() throws {
+        let master = try Data(contentsOf: repoRoot.appendingPathComponent("design/logo.png"))
+        XCTAssertGreaterThan(master.count, 10_000, "design/logo.png missing or truncated")
         let script = try read("scripts/make-appicon.sh")
-        XCTAssertTrue(script.contains("logo-small.svg"), "make-appicon.sh must pass the small artwork explicitly")
+        XCTAssertTrue(script.contains("design/logo.png"), "make-appicon must scale from the master")
+        XCTAssertTrue(script.contains("icon_512x512@2x.png"), "all ten sizes must be listed")
     }
 
     // MARK: - Themes
