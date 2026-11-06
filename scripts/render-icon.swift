@@ -107,14 +107,18 @@ if official {
         // make-appicon.sh, not hidden here (hard-coding it broke previews and A/B renders).
         let markSource = URL(fileURLWithPath: svgPath)
         if let mark = renderMark(svgPath: markSource.path, size: workPixels) {
+            // The mask must cover exactly the plate's rect (100,100,824,824). Stretching it over
+            // the whole canvas made the corners 24% squarer than Apple's template.
             if let plateMask = alphaMask(plate, side: plate.width) {
                 let scaled = CGContext(data: nil, width: workPixels, height: workPixels, bitsPerComponent: 8,
                                        bytesPerRow: workPixels * 4, space: cs,
                                        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
                 scaled.interpolationQuality = .high
-                scaled.draw(plateMask, in: CGRect(x: 0, y: 0, width: workPixels, height: workPixels))
+                let plateRect = CGRect(x: 100 * unit, y: 100 * unit,
+                                       width: 824 * unit, height: 824 * unit)
+                scaled.draw(plateMask, in: plateRect)
                 if let mask = scaled.makeImage() {
-                    ctx.clip(to: CGRect(x: 0, y: 0, width: workPixels, height: workPixels), mask: mask)
+                    ctx.clip(to: plateRect, mask: mask)
                 }
             }
             let side = Double(workPixels) * artworkBoost
@@ -162,28 +166,33 @@ func renderMark(svgPath: String, size: Int) -> CGImage? {
 // MARK: - Alpha mask
 
 /// White pixels carrying the source's alpha — usable as `CGContext.clip(to:mask:)`.
+/// Pure CoreGraphics buffers: NSBitmapImageRep.colorAt mis-parses the template PNGs' colour space
+/// (it silently returns wrong components), which used to widen the corners by 24%.
 func alphaMask(_ image: CGImage, side: Int) -> CGImage? {
     let cs = CGColorSpace(name: CGColorSpace.sRGB)!
-    let src = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8,
-                        bytesPerRow: image.width * 4, space: cs,
+    let srcW = image.width, srcH = image.height
+    let src = CGContext(data: nil, width: srcW, height: srcH, bitsPerComponent: 8,
+                        bytesPerRow: srcW * 4, space: cs,
                         bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-    src.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
-    guard let base = src.data?.bindMemory(to: UInt8.self, capacity: image.width * image.height * 4) else { return nil }
+    src.draw(image, in: CGRect(x: 0, y: 0, width: srcW, height: srcH))
+    guard let srcBuf = src.data?.bindMemory(to: UInt8.self, capacity: srcW * srcH * 4) else { return nil }
 
     let out = CGContext(data: nil, width: side, height: side, bitsPerComponent: 8,
                         bytesPerRow: side * 4, space: cs,
                         bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-    guard let dst = out.data?.bindMemory(to: UInt8.self, capacity: side * side * 4) else { return nil }
-    let sx = Double(image.width) / Double(side)
+    guard let dstBuf = out.data?.bindMemory(to: UInt8.self, capacity: side * side * 4) else { return nil }
+    let sx = Double(srcW) / Double(side)
+    let sy = Double(srcH) / Double(side)
     for y in 0..<side {
+        let srcY = min(srcH - 1, Int(Double(y) * sy))
         for x in 0..<side {
-            let srcIndex = (Int(Double(y) * sx) * image.width + Int(Double(x) * sx)) * 4
-            let alpha = base[srcIndex + 3]
-            let dstIndex = (y * side + x) * 4
-            dst[dstIndex + 0] = 255
-            dst[dstIndex + 1] = 255
-            dst[dstIndex + 2] = 255
-            dst[dstIndex + 3] = alpha
+            let srcX = min(srcW - 1, Int(Double(x) * sx))
+            let alpha = srcBuf[(srcY * srcW + srcX) * 4 + 3]
+            let dst = (y * side + x) * 4
+            dstBuf[dst + 0] = 255
+            dstBuf[dst + 1] = 255
+            dstBuf[dst + 2] = 255
+            dstBuf[dst + 3] = alpha
         }
     }
     return out.makeImage()
