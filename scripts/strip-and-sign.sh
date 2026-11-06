@@ -17,6 +17,12 @@ for binary in "${BINARIES[@]}"; do
   strip -x "$binary" 2>/dev/null || true
 done
 
+# The embedded framework is stripped too, so its signature must be repaired as well — otherwise
+# dyld refuses to load it and the app dies with SIGKILL (Code Signature Invalid).
+if [ -d "$APP/Contents/Frameworks/MarkDownGoCore.framework" ]; then
+  codesign --force --sign - "$APP/Contents/Frameworks/MarkDownGoCore.framework" >/dev/null 2>&1
+fi
+
 APEX="$APP/Contents/PlugIns/MarkDownGoQuickLook.appex"
 if [ -d "$APEX" ]; then
   ENT="MarkDownGo/QuickLook/MarkDownGoQuickLook.entitlements"
