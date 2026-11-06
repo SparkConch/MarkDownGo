@@ -1,28 +1,27 @@
 #!/bin/bash
-# Renders design/logo.svg (64px and up) and design/logo-small.svg (16/32/64px) into every macOS
-# app-icon size and writes the appiconset manifest. Re-run after editing either SVG: make icon
+# Build the macOS appiconset from the author's hand-made master (design/logo.png, 1024x1024,
+# rounded corners baked into the alpha channel). Every size is a single high-quality downscale
+# of the one drawing — no generated plate, no shadow layer, nothing else.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+MASTER="$ROOT/design/logo.png"
 SET="$ROOT/MarkDownGo/Resources/Assets.xcassets/AppIcon.appiconset"
 mkdir -p "$SET"
 rm -f "$SET"/*.png
 
-# size:filename:artwork pairs (macOS icon matrix). The small artwork is a separate drawing.
-while IFS=: read -r px file art; do
-  python3 "$ROOT/scripts/make-logo.py" > /dev/null
-  swift "$ROOT/scripts/render-icon.swift" "$ROOT/design/$art" "$SET/$file" "$px" official > /dev/null
-done <<'SIZES'
-16:icon_16x16.png:logo-small.svg
-32:icon_16x16@2x.png:logo-small.svg
-32:icon_32x32.png:logo-small.svg
-64:icon_32x32@2x.png:logo-small.svg
-128:icon_128x128.png:logo.svg
-256:icon_128x128@2x.png:logo.svg
-256:icon_256x256.png:logo.svg
-512:icon_256x256@2x.png:logo.svg
-512:icon_512x512.png:logo.svg
-1024:icon_512x512@2x.png:logo.svg
-SIZES
+resize() { # px file
+  sips -s format png --resampleHeightWidth "$1" "$1" "$MASTER" --out "$SET/$2" >/dev/null
+}
+resize 16   icon_16x16.png
+resize 32   icon_16x16@2x.png
+resize 32   icon_32x32.png
+resize 64   icon_32x32@2x.png
+resize 128  icon_128x128.png
+resize 256  icon_128x128@2x.png
+resize 256  icon_256x256.png
+resize 512  icon_256x256@2x.png
+resize 512  icon_512x512.png
+resize 1024 icon_512x512@2x.png
 
 cat > "$SET/Contents.json" <<'JSON'
 {
@@ -41,4 +40,4 @@ cat > "$SET/Contents.json" <<'JSON'
   "info" : { "author" : "xcode", "version" : 1 }
 }
 JSON
-echo "app iconset written: $SET"
+echo "app iconset written from design/logo.png: $SET"
