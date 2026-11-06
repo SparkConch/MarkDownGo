@@ -45,6 +45,8 @@ struct SettingsView: View {
     @AppStorage(PreferenceKey.appearance) private var appearance = AppearanceMode.system.rawValue
     @AppStorage(PreferenceKey.theme) private var theme = Theme.fallback.id
     @AppStorage(PreferenceKey.quickLookMode) private var quickLookMode = QuickLookMode.rendered.rawValue
+    @State private var isDefaultHandler = DefaultHandler.isCurrent
+    @State private var currentHandlerName = DefaultHandler.currentHandlerName
     @State private var revision = 0
 
     var body: some View {
@@ -77,6 +79,25 @@ struct SettingsView: View {
             Text(Theme.named(theme).summary)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+
+            // Default app for .md: LaunchServices decides this, so it is a button rather than a
+            // toggle — there is no "off" state to write, only "make it us" / "leave it alone".
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L("settings.defaultHandler"))
+                    Text(isDefaultHandler
+                         ? L("settings.defaultHandler.isUs")
+                         : String(format: L("settings.defaultHandler.current"), currentHandlerName))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button(L("settings.defaultHandler.make")) {
+                    DefaultHandler.apply()
+                    refreshHandlerState()
+                }
+                .disabled(isDefaultHandler)
+            }
 
             Picker(L("settings.quickLook"), selection: $quickLookMode) {
                 ForEach(QuickLookMode.allCases, id: \.rawValue) { mode in
@@ -113,5 +134,14 @@ struct SettingsView: View {
         .onChange(of: softWrap) { _ in Preferences.notifyChanged() }
         .onChange(of: lineNumbers) { _ in Preferences.notifyChanged() }
         .onChange(of: imageMode) { _ in Preferences.notifyChanged() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            refreshHandlerState()
+        }
+    }
+
+    /// Re-reads LaunchServices state, e.g. after the user changed the default elsewhere.
+    private func refreshHandlerState() {
+        isDefaultHandler = DefaultHandler.isCurrent
+        currentHandlerName = DefaultHandler.currentHandlerName
     }
 }

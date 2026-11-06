@@ -65,3 +65,8 @@
 "settings.quickLook.hint" = "在访达按空格预览时显示什么。代码模式不启动 WebKit，翻开更快。";
 "quicklook.mode.rendered" = "渲染后";
 "quicklook.mode.code" = "源码";
+"settings.defaultHandler" = "默认打开方式";
+"settings.defaultHandler.isUs" = "当前由 MarkDownGo 打开 .md 文件";
+"settings.defaultHandler.current" = "当前由 %@ 打开";
+"settings.defaultHandler.make" = "设为默认";
+"settings.defaultHandler.none" = "未设置默认应用";

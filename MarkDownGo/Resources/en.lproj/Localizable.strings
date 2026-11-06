@@ -65,3 +65,8 @@
 "settings.quickLook.hint" = "What Space bar shows in Finder. Code mode opens without spinning up WebKit.";
 "quicklook.mode.rendered" = "Rendered";
 "quicklook.mode.code" = "Source code";
+"settings.defaultHandler" = "Default Markdown App";
+"settings.defaultHandler.isUs" = "MarkDownGo opens .md files";
+"settings.defaultHandler.current" = "Currently opened by %@";
+"settings.defaultHandler.make" = "Use MarkDownGo";
+"settings.defaultHandler.none" = "No default app";
