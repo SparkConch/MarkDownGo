@@ -60,3 +60,8 @@
 
 "settings.language.en" = "English";
 "settings.language.zh-Hans" = "中文";
+"settings.theme" = "阅读主题";
+"settings.quickLook" = "访达预览";
+"settings.quickLook.hint" = "在访达按空格预览时显示什么。代码模式不启动 WebKit，翻开更快。";
+"quicklook.mode.rendered" = "渲染后";
+"quicklook.mode.code" = "源码";

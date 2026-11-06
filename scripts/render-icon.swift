@@ -16,8 +16,8 @@
 // template's shadow, no invented blur or alpha.
 //
 // usage: render-icon <logo.svg> <out.png> <px> [official]
-// The mark source is chosen by size: design/logo-small.svg at 16/32px, design/logo.svg above —
-// redrawn, not scaled (Apple's own small icons are separate drawings too).
+// The caller chooses the mark artwork: make-appicon.sh passes design/logo-small.svg at 16/32/64px
+// and design/logo.svg above (Apple's own small icons are separate drawings too).
 import AppKit
 import ImageIO
 import UniformTypeIdentifiers
@@ -103,8 +103,9 @@ if official {
         }
 
         // 3) The mark, clipped to the plate silhouette.
-        // Small sizes use the dedicated drawing (logo-small.svg), selected by target pixels.
-        let markSource = smallSize ? designURL("logo-small.svg") : URL(fileURLWithPath: svgPath)
+        // Honour the SVG the caller passed in; the size-specific artwork choice lives in
+        // make-appicon.sh, not hidden here (hard-coding it broke previews and A/B renders).
+        let markSource = URL(fileURLWithPath: svgPath)
         if let mark = renderMark(svgPath: markSource.path, size: workPixels) {
             if let plateMask = alphaMask(plate, side: plate.width) {
                 let scaled = CGContext(data: nil, width: workPixels, height: workPixels, bitsPerComponent: 8,

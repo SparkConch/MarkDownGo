@@ -1,0 +1,14 @@
+/* 宣纸 — 暖骨白纸面、墨黑正文、衬线标题。
+   取自 MarkDownGo 图标的底色（#F6F2EA 家族），无彩色，靠层级与留白而不是颜色建立结构。 */
+:root {
+  --paper: #FAF7F1;
+  --ink: #1C1B18;
+  --ink-soft: #6B665C;
+  --rule: #E4DED2;
+  --accent: #8A6B3F;
+  --code-bg: #F2EDE3;
+  --mark-bg: #EFE4CB;
+  --serif: "Songti SC", "STSong", "Source Han Serif SC", Georgia, serif;
+  --sans: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+}

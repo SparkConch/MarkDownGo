@@ -1,6 +1,41 @@
 import SwiftUI
 import MarkDownGoCore
 
+/// Two-tone chip showing a theme's paper and ink at a glance.
+private struct ThemeSwatch: View {
+    let theme: Theme
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 4, style: .continuous)
+            .fill(Color(nsColor: NSColor(hex: theme.paperHex) ?? .textBackgroundColor))
+            .overlay {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5)
+            }
+            .overlay(alignment: .trailing) {
+                Rectangle()
+                    .fill(Color(nsColor: NSColor(hex: theme.inkHex) ?? .labelColor))
+                    .frame(width: 6)
+                    .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+                    .padding(2)
+            }
+            .frame(width: 26, height: 16)
+    }
+}
+
+extension NSColor {
+    /// `#RRGGBB` → NSColor, used only for theme swatches.
+    convenience init?(hex: String) {
+        var value = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        guard value.count == 6, let number = UInt32(value, radix: 16) else { return nil }
+        value = ""
+        self.init(srgbRed: CGFloat((number >> 16) & 0xFF) / 255,
+                  green: CGFloat((number >> 8) & 0xFF) / 255,
+                  blue: CGFloat(number & 0xFF) / 255,
+                  alpha: 1)
+    }
+}
+
 struct SettingsView: View {
     @AppStorage(PreferenceKey.fontSize) private var fontSize: Double = 15
     @AppStorage(PreferenceKey.softWrap) private var softWrap = true
@@ -8,6 +43,8 @@ struct SettingsView: View {
     @AppStorage(PreferenceKey.imageMode) private var imageMode = ImageStore.Mode.directory.rawValue
     @AppStorage(PreferenceKey.language) private var language = InterfaceLanguage.system.rawValue
     @AppStorage(PreferenceKey.appearance) private var appearance = AppearanceMode.system.rawValue
+    @AppStorage(PreferenceKey.theme) private var theme = Theme.fallback.id
+    @AppStorage(PreferenceKey.quickLookMode) private var quickLookMode = QuickLookMode.rendered.rawValue
     @State private var revision = 0
 
     var body: some View {
@@ -26,6 +63,31 @@ struct SettingsView: View {
                 Text(L("settings.imageMode.directory")).tag(ImageStore.Mode.directory.rawValue)
                 Text(L("settings.imageMode.base64")).tag(ImageStore.Mode.base64.rawValue)
             }
+            // Reading theme drives both the in-app preview and the Finder preview.
+            Picker(L("settings.theme"), selection: $theme) {
+                ForEach(Theme.all) { item in
+                    HStack(spacing: 8) {
+                        ThemeSwatch(theme: item)
+                        Text(item.displayName)
+                    }
+                    .tag(item.id)
+                }
+            }
+            .onChange(of: theme) { _ in Preferences.notifyChanged() }
+            Text(Theme.named(theme).summary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Picker(L("settings.quickLook"), selection: $quickLookMode) {
+                ForEach(QuickLookMode.allCases, id: \.rawValue) { mode in
+                    Text(mode.displayName).tag(mode.rawValue)
+                }
+            }
+            .onChange(of: quickLookMode) { _ in Preferences.notifyChanged() }
+            Text(L("settings.quickLook.hint"))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
             Picker(L("settings.appearance"), selection: $appearance) {
                 ForEach(AppearanceMode.allCases, id: \.rawValue) { mode in
                     Text(L("settings.appearance.\(mode.rawValue)")).tag(mode.rawValue)

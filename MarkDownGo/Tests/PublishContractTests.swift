@@ -120,9 +120,58 @@ final class PublishContractTests: XCTestCase {
         // Small sizes need their own drawing; scaling the 1024 artwork down turns 16px into mush.
         let small = try read("design/logo-small.svg")
         XCTAssertTrue(small.contains("<svg"))
+        // The small artwork must equal the standard M/arrow geometry (only shaft/arrow heavier),
+        // otherwise a separate drawing can silently drift into a completely different mark.
+        let standard = try read("design/logo.svg")
+        let mPath = "M232 183 L392 183 L512 343 L632 183 L792 183 L792 632"
+        XCTAssertTrue(standard.contains(mPath), "standard M geometry changed")
+        XCTAssertTrue(small.contains(mPath), "small artwork must keep the standard M geometry")
         let renderer = try read("scripts/render-icon.swift")
-        XCTAssertTrue(renderer.contains("logo-small.svg"), "renderer must switch to the small artwork")
         XCTAssertTrue(renderer.contains("smallSize"), "renderer must special-case small sizes")
+        XCTAssertFalse(renderer.contains("designURL(\"logo-small.svg\")"),
+                       "renderer must honour its SVG argument, not hard-code the small artwork")
+        let script = try read("scripts/make-appicon.sh")
+        XCTAssertTrue(script.contains("logo-small.svg"), "make-appicon.sh must pass the small artwork explicitly")
+    }
+
+    // MARK: - Themes
+
+    func testEveryThemeShipsLayoutAndTokens() throws {
+        let layout = try read("MarkDownGo/Resources/Themes/layout.css")
+        XCTAssertTrue(layout.contains("--paper"), "layout must define the token contract")
+        for theme in ["xuan", "zhu", "ye"] {
+            let css = try read("MarkDownGo/Resources/Themes/\(theme).css")
+            for token in ["--paper", "--ink", "--accent", "--serif", "--mono"] {
+                XCTAssertTrue(css.contains(token), "\(theme).css missing \(token)")
+            }
+        }
+    }
+
+    func testThemesAreNotAForeignSet() throws {
+        // The theme names and tokens came from our own palette; this guards against someone later
+        // pasting another product's theme file in wholesale.
+        let forbidden = ["OrangeHeart", "Lapis", "Maize", "Phycat", "Rainbow", "wenyan"]
+        for theme in ["xuan", "zhu", "ye"] {
+            let css = try read("MarkDownGo/Resources/Themes/\(theme).css")
+            for name in forbidden {
+                XCTAssertFalse(css.contains(name), "\(theme).css must not reference \(name)")
+            }
+        }
+    }
+
+    // MARK: - QuickLook extension
+
+    func testQuickLookExtensionIsDeclared() throws {
+        let plist = try read("MarkDownGo/QuickLook/Info.plist")
+        XCTAssertTrue(plist.contains("com.apple.quicklook.preview"))
+        XCTAssertTrue(plist.contains("QLSupportedContentTypes"))
+        XCTAssertTrue(plist.contains("net.daringfireball.markdown"))
+        // PlugInKit refuses non-sandboxed QuickLook plugins, so the entitlement is load-bearing.
+        let entitlements = try read("MarkDownGo/QuickLook/MarkDownGoQuickLook.entitlements")
+        XCTAssertTrue(entitlements.contains("com.apple.security.app-sandbox"))
+        let project = try read("project.yml")
+        XCTAssertTrue(project.contains("MarkDownGoQuickLook"))
+        XCTAssertTrue(project.contains("CODE_SIGN_ENTITLEMENTS"))
     }
 
     // MARK: - Publish boundary

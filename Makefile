@@ -1,7 +1,7 @@
 APP_NAME := MarkDownGo
 CONFIG ?= Release
 DERIVED := build
-VERSION := $(shell awk '/MARKETING_VERSION:/ {gsub(/"/,""); print $$2}' project.yml)
+VERSION := $(shell awk '/MARKETING_VERSION:/ {gsub(/"/,""); print $$2; exit}' project.yml)
 
 .PHONY: project build test dmg run sign icon clean
 

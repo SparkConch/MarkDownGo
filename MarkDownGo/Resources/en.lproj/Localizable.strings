@@ -60,3 +60,8 @@
 
 "settings.language.en" = "English";
 "settings.language.zh-Hans" = "中文";
+"settings.theme" = "Reading Theme";
+"settings.quickLook" = "Finder Preview";
+"settings.quickLook.hint" = "What Space bar shows in Finder. Code mode opens without spinning up WebKit.";
+"quicklook.mode.rendered" = "Rendered";
+"quicklook.mode.code" = "Source code";

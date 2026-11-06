@@ -5,6 +5,8 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindow: NSWindow?
     private var homeWindow: NSWindow?
+    /// Set when LaunchServices asks us to open a file during startup.
+    private var claimedByOpenRequest = false
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         Preferences.registerDefaults()
@@ -17,9 +19,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         applyAppearance()
-        showHome(nil)
-        // Warm the WebContent process right after the launcher is up; the first document then
-        // starts its preview against a live process instead of paying process spawn latency.
+        mirrorPreferencesForExtension()
+        scheduleHomeIfUnclaimed()
+        // Warm the WebContent process right after launch; the first document then starts its
+        // preview against a live process instead of paying process spawn latency.
         DispatchQueue.main.async { PreviewPool.shared.prewarm() }
         #if DEBUG
         runSmokeHook()
@@ -30,8 +33,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
+    /// Mirrors the settings the QuickLook extension needs into the shared App Group. The extension
+    /// is sandboxed and cannot read our own UserDefaults domain.
+    private func mirrorPreferencesForExtension() {
+        Preferences.writeExtensionConfig()
+    }
+
     @objc private func preferencesChanged(_ note: Notification) {
         applyAppearance()
+        mirrorPreferencesForExtension()
         // Menus and every open window re-read their strings; no relaunch.
         NSApp.mainMenu = MainMenu.build()
         for window in NSApp.windows {
@@ -106,6 +116,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     #endif
 
+    /// A document was requested during launch (Finder "Open With", `open -a`, drag onto the Dock
+    /// icon). The launcher must not appear at all in that case.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        claimedByOpenRequest = true
+        homeWindow?.orderOut(nil)
+        for url in urls {
+            NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { _, _, error in
+                if let error {
+                    FileHandle.standardError.write(Data("open failed for \(url.lastPathComponent): \(error)\n".utf8))
+                }
+            }
+        }
+        // Release the claim once the documents are on screen, so closing them later still returns
+        // to the launcher.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+            self?.claimedByOpenRequest = false
+        }
+    }
+
+    /// Shows the launcher only if nobody asked for a file. Runs after `homeRevealDelay` so the
+    /// open request from LaunchServices has landed; if a document window exists by then, stay out
+    /// of the way.
+    private func scheduleHomeIfUnclaimed() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + Layout.homeRevealDelay) { [weak self] in
+            guard let self, !self.claimedByOpenRequest else { return }
+            guard NSDocumentController.shared.documents.isEmpty else { return }
+            self.showHome(nil)
+        }
+    }
+
     /// The launcher replaces the "untitled document on launch" habit (SPEC §4).
     func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool { false }
 
@@ -116,7 +156,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldSaveApplicationState(_ coder: NSCoder) -> Bool { false }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if !flag { showHome(nil) }
+        if !flag, NSDocumentController.shared.documents.isEmpty { showHome(nil) }
         return true
     }
 

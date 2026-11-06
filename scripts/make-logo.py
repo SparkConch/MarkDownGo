@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Emit the MarkDownGo mark sources.
 
-Two artworks, because one drawing cannot serve 16px and 1024px:
-  design/logo.svg        standard artwork, used from 64px up
-  design/logo-small.svg  small-size artwork, used at 16px and 32px
+Two artworks sharing one geometry (the small one only thickens the shaft and arrow head for 16px):
+  design/logo.svg        standard artwork, used from 128px up
+  design/logo-small.svg  small-size artwork, used at 16/32/64px
 
 The icon plate and drop shadow are NOT drawn here: they are Apple's official macOS app icon
 template layers (design/official-plate.png, design/official-shadow.png), extracted from
@@ -19,10 +19,13 @@ GRID = 1024
 ART = 824
 MARK_SCALE = ART / GRID  # 0.8046875
 
-# Measured 2026-11-01: at dy=0 the mark's gaps inside the plate are 147/187 (sitting high); each +1
-# of dy moves it 0.80 canvas px down and shifts the gap delta by 1.6, so equal gaps land at 25.0.
-# Final result: top 167 / bottom 167. The ink centroid ends up ~459 — expected, leave it alone.
-MARK_DY = 25.0
+# Measured 2026-11-01: dy=0 → gaps 147/187 (high); +1 dy moves 0.80px down, gap delta 1.6. Equal
+# bounding-box gaps (dy=25 → 167/167) READ high: heavy flat crown vs a thin arrow point the eye
+# discounts, so the point must sit closer to the edge. Tuned by eye against the real 824px plate in a
+# clean A/B (no guides): dy=37 → 177/157, dy=45 → 183/150, dy=65 → 200/134 chosen by the designer
+# (the small 37/45 steps were visually imperceptible; 65 is a clearly lower, settled position).
+# Ink centroid ~498, leave it alone.
+MARK_DY = 65.0
 
 # Standard geometry (congruent triangles, seamless shaft join) in mark space.
 T = 183.0          # crown
@@ -37,9 +40,19 @@ SH = 88.0
 shaft_top = band - (SH / 2) * slope
 shaft_x = 512 - SH / 2
 
+# Small-size artwork keeps the SAME M/arrow geometry as the standard mark; only the shaft and the
+# arrow head are heavier so they survive 16/32px. Derived from the constants above so the two files
+# can never drift apart (an earlier "separate drawing" with a V-stroke produced a crown, not an M).
+SMALL_SH = 112.0
+small_shaft_top = band - (SMALL_SH / 2) * slope
+small_shaft_x = 512 - SMALL_SH / 2
+SMALL_ARROW_W, SMALL_ARROW_H = 300.0, 180.0
+
 HEADER_COMMON = """The plate and drop shadow are Apple's official macOS icon template layers
      (design/official-plate.png, design/official-shadow.png), composited by scripts/render-icon.swift.
-     The mark is balanced by bounding box (equal gaps inside the plate), not by ink centroid."""
+     The mark is optically balanced: the arrow tip sits closer to the bottom edge than the crown does to
+     the top edge, because a thin point reads as smaller than a heavy flat bar (equal bounding-box gaps
+     look high). The ink centroid is not the target."""
 
 STANDARD = f"""  <g transform="translate(512 512) scale({MARK_SCALE:.7f}) translate(-512 -512)">
     <g transform="translate(0 {MARK_DY})">
@@ -49,18 +62,13 @@ STANDARD = f"""  <g transform="translate(512 512) scale({MARK_SCALE:.7f}) transl
     </g>
   </g>"""
 
-# At 16px the standard arrow head is ~1.9px wide and the notch ~3.8px: nothing can keep that crisp.
-# The small variant therefore drops the notch and the shaft and works with heavier masses — two thick
-# legs, a bold V wedge, a wide arrow — inside the same outer box, so the optical centre still holds.
+# Small sizes (16/32/64px) use the standard geometry with a heavier shaft and arrow head; the
+# renderer supersamples and enlarges slightly, which keeps the M legible at 16px.
 SMALL = f"""  <g transform="translate(512 512) scale({MARK_SCALE:.7f}) translate(-512 -512)">
     <g transform="translate(0 {MARK_DY})">
-      <g fill="#0B0B0A">
-        <rect x="232" y="{T:.0f}" width="150" height="{LEG_BOTTOM - T:.0f}"/>
-        <rect x="642" y="{T:.0f}" width="150" height="{LEG_BOTTOM - T:.0f}"/>
-        <path d="M232 {T:.0f} L512 430 L792 {T:.0f}" fill="none" stroke="#0B0B0A" stroke-width="210"
-              stroke-linecap="butt" stroke-linejoin="miter"/>
-        <polygon points="362,600 662,600 512,{TIP:.0f}"/>
-      </g>
+      <path fill="#0B0B0A" d="M232 {T:.0f} L392 {T:.0f} L512 {notch:.0f} L632 {T:.0f} L792 {T:.0f} L792 {LEG_BOTTOM:.0f} L692 {LEG_BOTTOM:.0f} L692 {legs_y:.0f} L512 {band:.0f} L332 {legs_y:.0f} L332 {LEG_BOTTOM:.0f} L232 {LEG_BOTTOM:.0f} Z"/>
+      <rect x="{small_shaft_x:.1f}" y="{small_shaft_top:.1f}" width="{SMALL_SH:.0f}" height="{LEG_BOTTOM + 8 - small_shaft_top:.1f}" fill="#0B0B0A"/>
+      <polygon points="{512 - SMALL_ARROW_W / 2:.0f},{LEG_BOTTOM:.0f} {512 + SMALL_ARROW_W / 2:.0f},{LEG_BOTTOM:.0f} 512,{LEG_BOTTOM + SMALL_ARROW_H:.0f}" fill="#0B0B0A"/>
     </g>
   </g>"""
 
@@ -77,6 +85,6 @@ def write(path: str, comment: str, body: str) -> None:
     print(f"wrote {path}")
 
 
-write("design/logo.svg", "Standard artwork, used from 64px up.", STANDARD)
-write("design/logo-small.svg", "Small-size artwork, used at 16px and 32px (redrawn, not scaled).", SMALL)
+write("design/logo.svg", "Standard artwork, used from 128px up.", STANDARD)
+write("design/logo-small.svg", "Small-size artwork, used at 16/32/64px (same geometry, heavier shaft/arrow).", SMALL)
 print(f"MARK_DY={MARK_DY}")

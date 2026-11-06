@@ -25,6 +25,12 @@ enum Layout {
     /// the guard window closes.
     static let scrollSuppressMS: Int = 180
 
+    /// How long the launcher waits before appearing. Finder's "open with" and `open -a App file.md`
+    /// deliver the open request shortly *after* launch, so showing the launcher immediately made it
+    /// flash in front of a document the user had already asked for. Long enough to catch that
+    /// request, short enough to feel instant on a plain launch.
+    static let homeRevealDelay: TimeInterval = 0.45
+
     /// Settle time before a smoke hook acts after launch (home window + first layout).
     /// Verification-only; compiled out of Release.
     static let smokeLaunchDelay: TimeInterval = 0.8

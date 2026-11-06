@@ -1,0 +1,14 @@
+/* 朱批 — 宣纸底 + 朱红批注色。朱红取自印章，只用于标题标记、引用线和链接，
+   正文保持墨色；强调靠“一点红”而不是大面积着色。 */
+:root {
+  --paper: #FCFAF6;
+  --ink: #241F1C;
+  --ink-soft: #6E655D;
+  --rule: #EADFD5;
+  --accent: #A8342A;
+  --code-bg: #F5F0E8;
+  --mark-bg: #F3DED8;
+  --serif: "Songti SC", "STSong", "Source Han Serif SC", Georgia, serif;
+  --sans: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+}

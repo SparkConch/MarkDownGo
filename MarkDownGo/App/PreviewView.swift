@@ -15,6 +15,9 @@ final class PreviewView: WKWebView, WKNavigationDelegate, WKScriptMessageHandler
         let configuration = WKWebViewConfiguration()
         configuration.setURLSchemeHandler(scheme, forURLScheme: PreviewScheme.scheme)
         self.scheme = scheme
+        let theme = Preferences.theme
+        scheme.themeCSS = theme.css()
+        scheme.isDarkTheme = (theme.id == "ye")
         super.init(frame: .zero, configuration: configuration)
         navigationDelegate = self
         underPageBackgroundColor = .textBackgroundColor
@@ -58,6 +61,15 @@ final class PreviewView: WKWebView, WKNavigationDelegate, WKScriptMessageHandler
     func reloadChrome() {
         ready = false
         load(URLRequest(url: PreviewScheme.pageURL))
+    }
+
+    /// Re-render with a new theme: swap the stylesheet the scheme serves, then reload the shell so
+    /// the new tokens apply to already-rendered content.
+    func applyTheme() {
+        let theme = Preferences.theme
+        scheme.themeCSS = theme.css()
+        scheme.isDarkTheme = (theme.id == "ye")
+        reloadChrome()
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {

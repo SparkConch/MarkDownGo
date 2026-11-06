@@ -163,7 +163,7 @@ final class EditorViewController: NSSplitViewController, NSMenuItemValidation {
 
     @objc private func preferencesChanged(_ note: Notification) {
         editorView.applyPreferences()
-        preview.reloadChrome()
+        preview.applyTheme()
         for case let scroll as NSScrollView in view.subviewsRecursive() where scroll.documentView === editorView {
             scroll.rulersVisible = Preferences.lineNumbers
         }
