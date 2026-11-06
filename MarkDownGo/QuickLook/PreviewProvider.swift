@@ -8,110 +8,188 @@ private let log = Logger(subsystem: "com.sparkconch.MarkDownGo.quicklook", categ
 
 /// Finder preview for Markdown files.
 ///
-/// Follows the setting the app writes (`mdg.quickLookMode`): **rendered** draws the document the
-/// way the app's preview pane does — same cmark pipeline, same theme stylesheet — while **code**
-/// shows the source in a text view, which is also the fast path (no WebKit process to spin up when
-/// someone is just arrowing through files in a folder).
-///
-/// Everything is resolved from this extension's own bundle: themes and the KaTeX/Mermaid assets are
-/// copied into both hosts, so no App Group container or shared file is involved.
+/// Three rules, learned the hard way:
+///  1. **Never show a blank panel.** Every failure path ends in visible text (error message, or the
+///     raw source). A blank QuickLook window tells the user nothing and looks like a broken app.
+///  2. **Read the file with a security-scoped bookmark.** A sandboxed extension only gets a
+///     security-scoped URL from QuickLook; without `startAccessingSecurityScopedResource` the read
+///     fails and the panel stays empty.
+///  3. **Do not depend on a custom URL scheme inside the extension.** `WKURLSchemeHandler` behaves
+///     inconsistently in an appex; loading the shell with `loadHTMLString(_:baseURL:)` pointed at
+///     the bundle's resource directory keeps KaTeX/Mermaid/fonts working through plain file URLs,
+///     which the sandbox allows for our own bundle.
 final class PreviewProvider: NSViewController, QLPreviewingController {
-    private var webView: WKWebView?
-    private var scheme: PreviewScheme?
-    private let scrollView = NSScrollView()
-    private let textView = NSTextView()
+    private var contentView: NSView?
 
     // MARK: - QLPreviewingController
 
     func preparePreviewOfFile(at url: URL, completionHandler handler: @escaping (Error?) -> Void) {
-        do {
-            let data = try Data(contentsOf: url)
-            // Same encoding detection as the editor: a GB18030 file must not preview as mojibake.
-            let encoding = TextEncoding.detect(data)
-            let text = String(data: data, encoding: encoding.cfEncoding)
-                ?? String(decoding: data, as: UTF8.self)
+        // QuickLook hands us a security-scoped URL; reading without this returns nothing (empty
+        // panel) even though the file plainly exists.
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
 
-            let mode = Preferences.extensionQuickLookMode()
-            log.debug("preview requested: \(url.lastPathComponent, privacy: .public) mode=\(mode.rawValue, privacy: .public) theme=\(Preferences.extensionTheme().id, privacy: .public) bytes=\(data.count)")
-            switch mode {
-            case .code:
-                showCode(text)
-            case .rendered:
-                showRendered(text, theme: Preferences.extensionTheme())
-            }
-            handler(nil)
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
         } catch {
-            handler(error)
+            log.notice("read failed: \(url.lastPathComponent, privacy: .public) — \(error.localizedDescription, privacy: .public)")
+            showMessage("MarkDownGo 无法读取这个文件\n\n\(error.localizedDescription)", monospaced: false)
+            handler(nil)
+            return
         }
+
+        let encoding = TextEncoding.detect(data)
+        let text = String(data: data, encoding: encoding.cfEncoding)
+            ?? String(decoding: data, as: UTF8.self)
+        let mode = Preferences.extensionQuickLookMode()
+        let theme = Preferences.extensionTheme()
+        log.notice("preview \(url.lastPathComponent, privacy: .public) mode=\(mode.rawValue, privacy: .public) theme=\(theme.id, privacy: .public) bytes=\(data.count)")
+
+        switch mode {
+        case .code:
+            showSource(text, fileName: url.lastPathComponent)
+        case .rendered:
+            showRendered(text, theme: theme)
+        }
+        handler(nil)
     }
 
-    // MARK: - Modes
+    // MARK: - Code mode
 
-    private func showCode(_ text: String) {
-        teardownWebView()
+    private func showSource(_ text: String, fileName: String) {
+        let scroll = NSScrollView()
+        let textView = NSTextView()
         textView.string = text
         textView.font = .monospacedSystemFont(ofSize: 12.5, weight: .regular)
         textView.textColor = .textColor
+        textView.backgroundColor = .textBackgroundColor
         textView.isEditable = false
         textView.isSelectable = true
+        textView.drawsBackground = true
         textView.textContainerInset = NSSize(width: 14, height: 12)
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
         textView.textContainer?.widthTracksTextView = true
-        textView.minSize = .zero
-        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        textView.minSize = NSSize(width: 0, height: 0)
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude,
+                                  height: CGFloat.greatestFiniteMagnitude)
 
-        scrollView.documentView = textView
-        scrollView.hasVerticalScroller = true
-        scrollView.autohidesScrollers = true
-        scrollView.drawsBackground = true
-        scrollView.backgroundColor = .textBackgroundColor
-        installIfNeeded(scrollView)
+        scroll.documentView = textView
+        scroll.hasVerticalScroller = true
+        scroll.autohidesScrollers = true
+        scroll.drawsBackground = true
+        scroll.backgroundColor = .textBackgroundColor
+        install(scroll)
     }
+
+    // MARK: - Rendered mode
 
     private func showRendered(_ text: String, theme: Theme) {
-        let scheme = PreviewScheme()
-        scheme.themeCSS = theme.css(in: .main)
-        scheme.isDarkTheme = (theme.id == "ye")
-        // A QuickLook panel is a page, not a split pane: keep the theme's own page padding.
-        scheme.compactPadding = false
-        scheme.html = MarkdownToHTML.render(text)
-        self.scheme = scheme
+        let body = MarkdownToHTML.render(text)
+        let css = theme.css(in: .main)
+        let dark = (theme.id == "ye")
 
-        let configuration = WKWebViewConfiguration()
-        configuration.setURLSchemeHandler(scheme, forURLScheme: PreviewScheme.scheme)
-        let web = WKWebView(frame: .zero, configuration: configuration)
-        web.underPageBackgroundColor = NSColor(srgbRed: 0.98, green: 0.97, blue: 0.95, alpha: 1)
-        web.navigationDelegate = self
-        webView = web
-        web.load(URLRequest(url: PreviewScheme.pageURL))
-        installIfNeeded(web)
+        // Base URL = our own Resources directory, so `preview/vendor/...` resolves to real files.
+        let base = Bundle.main.resourceURL
+        let html = """
+        <!doctype html>
+        <html>
+        <head>
+        <meta charset="utf-8">
+        <link rel="stylesheet" href="preview/vendor/katex/katex.min.css">
+        <script src="preview/vendor/katex/katex.min.js"></script>
+        <script src="preview/vendor/katex/auto-render.min.js"></script>
+        <script src="preview/vendor/mermaid/mermaid.min.js"></script>
+        <style>\(css)</style>
+        </head>
+        <body>
+        <main id="content">\(body)</main>
+        <script>
+        window.__MDG_DARK__ = \(dark ? "true" : "false");
+        (function () {
+          var root = document.getElementById('content');
+          root.querySelectorAll('pre > code.language-mermaid').forEach(function (code) {
+            var div = document.createElement('div');
+            div.className = 'mermaid';
+            div.textContent = code.textContent;
+            code.parentElement.replaceWith(div);
+          });
+          try {
+            renderMathInElement(root, {
+              delimiters: [
+                {left: '$$', right: '$$', display: true},
+                {left: '\\\\[', right: '\\\\]', display: true},
+                {left: '$', right: '$', display: false},
+                {left: '\\\\(', right: '\\\\)', display: false}
+              ],
+              ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code', 'option']
+            });
+          } catch (e) {}
+          try {
+            mermaid.initialize({ startOnLoad: false, securityLevel: 'loose',
+                                 theme: window.__MDG_DARK__ ? 'dark' : 'default' });
+            mermaid.run({ querySelector: '.mermaid' });
+          } catch (e) {}
+        })();
+        </script>
+        </body>
+        </html>
+        """
+
+        let web = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        web.setValue(false, forKey: "drawsBackground")
+        web.loadHTMLString(html, baseURL: base)
+        install(web)
+        log.notice("rendered html bytes=\(html.utf8.count) base=\(base?.lastPathComponent ?? "nil", privacy: .public)")
     }
 
-    private func teardownWebView() {
-        webView?.removeFromSuperview()
-        webView = nil
-        scheme = nil
+    // MARK: - Fallback
+
+    private func showMessage(_ message: String, monospaced: Bool) {
+        let scroll = NSScrollView()
+        let textView = NSTextView()
+        textView.string = message
+        textView.font = monospaced
+            ? .monospacedSystemFont(ofSize: 12.5, weight: .regular)
+            : .systemFont(ofSize: 13)
+        textView.textColor = .secondaryLabelColor
+        textView.isEditable = false
+        textView.textContainerInset = NSSize(width: 20, height: 18)
+        textView.isVerticallyResizable = true
+        textView.textContainer?.widthTracksTextView = true
+        scroll.documentView = textView
+        scroll.hasVerticalScroller = true
+        scroll.drawsBackground = true
+        scroll.backgroundColor = .textBackgroundColor
+        install(scroll)
     }
 
-    private func installIfNeeded(_ view: NSView) {
-        for subview in self.view.subviews { subview.removeFromSuperview() }
-        view.frame = self.view.bounds
-        view.autoresizingMask = [.width, .height]
-        self.view.addSubview(view)
+    // MARK: - Hosting
+
+    /// Auto Layout, not frames: the QuickLook host resizes this view after `preparePreviewOfFile`
+    /// returns, and a frame captured earlier collapses to nothing (a blank panel).
+    private func install(_ child: NSView) {
+        contentView?.removeFromSuperview()
+        child.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(child)
+        NSLayoutConstraint.activate([
+            child.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            child.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            child.topAnchor.constraint(equalTo: view.topAnchor),
+            child.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
+        contentView = child
+        // Hosts that ignore Auto Layout sizing fall back to this; without it some panels open at
+        // zero height and look empty.
+        preferredContentSize = NSSize(width: 820, height: 600)
+        log.notice("installed \(String(describing: type(of: child)), privacy: .public) in \(NSStringFromRect(self.view.frame), privacy: .public)")
     }
 
     override func loadView() {
-        view = NSView(frame: NSRect(x: 0, y: 0, width: 760, height: 560))
-    }
-}
-
-extension PreviewProvider: WKNavigationDelegate {
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        guard let html = scheme?.html else { return }
-        let payload = (try? JSONSerialization.data(withJSONObject: [html], options: []))
-            .flatMap { String(data: $0, encoding: .utf8) }
-            .map { String($0.dropFirst().dropLast()) } ?? "\"\""
-        webView.evaluateJavaScript("render(\(payload))", completionHandler: nil)
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 820, height: 600))
+        container.wantsLayer = true
+        container.layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
+        view = container
     }
 }
