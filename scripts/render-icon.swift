@@ -69,14 +69,10 @@ let ctx = work
 let unit = Double(workPixels) / 1024.0
 
 if official {
-    // 1) Official drop shadow at its template position (70, 87 top-down → y-flipped here).
-    //    Below 64px the template blur is sub-pixel and reads as grey haze, so it is skipped.
-    if !smallSize, let shadow = loadCGImage(designURL("official-shadow.png")) {
-        ctx.draw(shadow, in: CGRect(x: 70 * unit, y: (1024 - 87 - 878) * unit,
-                                    width: 878 * unit, height: 878 * unit))
-    }
+    // No drop shadow: the request is a clean silhouette — plate shape and mark only. The shadow
+    // layer stays available in design/official-shadow.png if it is ever wanted back.
 
-    // 2) Official plate silhouette, tinted #F6F2EA through its own alpha.
+    // Official plate silhouette, tinted #F6F2EA through its own alpha.
     if let plate = loadCGImage(designURL("official-plate.png")) {
         let side = plate.width
         let src = CGContext(data: nil, width: side, height: side, bitsPerComponent: 8,
@@ -102,7 +98,7 @@ if official {
             }
         }
 
-        // 3) The mark, clipped to the plate silhouette.
+        // The mark, clipped to the plate silhouette.
         // Honour the SVG the caller passed in; the size-specific artwork choice lives in
         // make-appicon.sh, not hidden here (hard-coding it broke previews and A/B renders).
         let markSource = URL(fileURLWithPath: svgPath)
