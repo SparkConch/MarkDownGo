@@ -79,7 +79,8 @@ targets:
         INFOPLIST_KEY_NSQuitAlwaysKeepsWindows: NO
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
         COMBINE_HIDPI_IMAGES: YES
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # App icon: supplied by the author (a hand-made 1024 PNG lands in the appiconset).
+        # No ASSETCATALOG_COMPILER_APPICON_NAME until then — the app uses the system default icon.
         # Warnings are defects; keep the build honest (see SPEC §3 implementation notes).
         SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
         # Compile with relative source paths so Swift metadata cannot embed /Users/<you>/...;
