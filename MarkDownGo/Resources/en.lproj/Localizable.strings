@@ -62,8 +62,9 @@
 "settings.language.zh-Hans" = "中文";
 "settings.theme" = "Reading Theme";
 "settings.quickLook" = "Finder Preview";
-"settings.quickLook.hint" = "What Space bar shows in Finder. Code mode opens without spinning up WebKit.";
+"settings.quickLook.hint" = "What Space bar shows in Finder. Rendered is the fullest; WYSIWYG and code open without spinning up WebKit.";
 "quicklook.mode.rendered" = "Rendered";
+"quicklook.mode.wysiwyg" = "WYSIWYG";
 "quicklook.mode.code" = "Source code";
 "settings.defaultHandler" = "Default Markdown App";
 "settings.defaultHandler.isUs" = "MarkDownGo opens .md files";

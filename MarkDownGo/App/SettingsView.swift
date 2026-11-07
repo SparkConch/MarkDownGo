@@ -7,32 +7,19 @@ private struct ThemeSwatch: View {
 
     var body: some View {
         RoundedRectangle(cornerRadius: 4, style: .continuous)
-            .fill(Color(nsColor: NSColor(hex: theme.paperHex) ?? .textBackgroundColor))
+            .fill(Color(nsColor: theme.paperColor))
             .overlay {
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
                     .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5)
             }
             .overlay(alignment: .trailing) {
                 Rectangle()
-                    .fill(Color(nsColor: NSColor(hex: theme.inkHex) ?? .labelColor))
+                    .fill(Color(nsColor: theme.inkColor))
                     .frame(width: 6)
                     .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
                     .padding(2)
             }
             .frame(width: 26, height: 16)
-    }
-}
-
-extension NSColor {
-    /// `#RRGGBB` → NSColor, used only for theme swatches.
-    convenience init?(hex: String) {
-        var value = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
-        guard value.count == 6, let number = UInt32(value, radix: 16) else { return nil }
-        value = ""
-        self.init(srgbRed: CGFloat((number >> 16) & 0xFF) / 255,
-                  green: CGFloat((number >> 8) & 0xFF) / 255,
-                  blue: CGFloat(number & 0xFF) / 255,
-                  alpha: 1)
     }
 }
 

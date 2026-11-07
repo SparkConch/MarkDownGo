@@ -47,10 +47,12 @@ final class PreviewProvider: NSViewController, QLPreviewingController {
         log.notice("preview \(url.lastPathComponent, privacy: .public) mode=\(mode.rawValue, privacy: .public) theme=\(theme.id, privacy: .public) bytes=\(data.count)")
 
         switch mode {
-        case .code:
-            showSource(text)
         case .rendered:
             showRendered(text, theme: theme)
+        case .wysiwyg:
+            showWysiwyg(text, theme: theme)
+        case .code:
+            showSource(text)
         }
         handler(nil)
     }
@@ -152,6 +154,91 @@ final class PreviewProvider: NSViewController, QLPreviewingController {
         log.notice("rendered html bytes=\(html.utf8.count) base=\(base?.lastPathComponent ?? "nil", privacy: .public)")
     }
 
+    // MARK: - WYSIWYG mode
+
+    /// Reading view: the editor's own scanner decides what is text and what is syntax, markers are
+    /// removed (not just made invisible), and the theme's paper and ink carry the colour. No WebKit,
+    /// so this opens instantly — but it also means no images, tables or math: those stay as text,
+    /// exactly like the in-app ⌘3 mode (SPEC Q19).
+    private func showWysiwyg(_ text: String, theme: Theme) {
+        let content = WysiwygText.make(from: text, styled: Styler.style(text))
+        let ink = theme.inkColor
+        let paper = theme.paperColor
+        let body = NSMutableParagraphStyle()
+        body.lineSpacing = 4
+        body.paragraphSpacing = 8
+
+        let attributed = NSMutableAttributedString(
+            string: content.string,
+            attributes: [
+                .font: NSFont.systemFont(ofSize: Self.bodySize),
+                .foregroundColor: ink,
+                .paragraphStyle: body,
+            ]
+        )
+        for token in content.tokens {
+            attributed.addAttributes(attributes(for: token.kind, ink: ink), range: token.range)
+        }
+        let scroll = NSScrollView(frame: view.bounds)
+        scroll.autoresizingMask = [.width, .height]
+        scroll.hasVerticalScroller = true
+        scroll.autohidesScrollers = true
+        scroll.drawsBackground = true
+        scroll.backgroundColor = paper
+
+        let contentSize = scroll.contentSize
+        let textView = NSTextView(frame: NSRect(origin: .zero, size: contentSize))
+        textView.textStorage?.setAttributedString(attributed)
+        textView.backgroundColor = paper
+        textView.drawsBackground = true
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.textContainerInset = NSSize(width: 32, height: 28)
+        textView.isVerticallyResizable = true
+        textView.autoresizingMask = [.width]
+        textView.minSize = NSSize(width: 0, height: contentSize.height)
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude,
+                                  height: CGFloat.greatestFiniteMagnitude)
+        textView.textContainer?.containerSize = NSSize(width: contentSize.width,
+                                                      height: CGFloat.greatestFiniteMagnitude)
+        textView.textContainer?.widthTracksTextView = true
+
+        scroll.documentView = textView
+        install(scroll)
+        log.notice("wysiwyg chars=\(content.string.count) shown=\(content.tokens.count)")
+    }
+
+    private static let bodySize: CGFloat = 16
+
+    private func attributes(for kind: StyleKind,
+                            ink: NSColor) -> [NSAttributedString.Key: Any] {
+        let bold = NSFontManager.shared
+        switch kind {
+        case .headingText(let level):
+            let sizes: [CGFloat] = [0, 26, 22, 19, 17, 16, 16]
+            let size = (level >= 1 && level <= 6) ? sizes[level] : Self.bodySize
+            return [.font: NSFont.boldSystemFont(ofSize: size), .foregroundColor: ink]
+        case .quoteText:
+            return [.foregroundColor: ink.withAlphaComponent(0.72)]
+        case .codeBlock, .codeSpan:
+            return [.font: NSFont.monospacedSystemFont(ofSize: Self.bodySize - 1, weight: .regular),
+                    .foregroundColor: ink.withAlphaComponent(0.85),
+                    .backgroundColor: ink.withAlphaComponent(0.07)]
+        case .strong:
+            return [.font: bold.convert(NSFont.systemFont(ofSize: Self.bodySize), toHaveTrait: .boldFontMask)]
+        case .emphasis:
+            return [.font: bold.convert(NSFont.systemFont(ofSize: Self.bodySize), toHaveTrait: .italicFontMask)]
+        case .strike:
+            return [.foregroundColor: ink.withAlphaComponent(0.6),
+                    .strikethroughStyle: NSUnderlineStyle.single.rawValue]
+        case .linkText, .urlText:
+            return [.foregroundColor: NSColor.linkColor]
+        case .horizontalRule:
+            return [.foregroundColor: ink.withAlphaComponent(0.35)]
+        default:
+            return [:]
+        }
+    }
     // MARK: - Fallback
 
     private func showMessage(_ message: String) {
