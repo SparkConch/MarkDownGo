@@ -70,7 +70,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.sparkconch.MarkDownGo
         PRODUCT_NAME: MarkDownGo
-        MARKETING_VERSION: 0.1.0
+        MARKETING_VERSION: 0.2.0
         CURRENT_PROJECT_VERSION: 1
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: MarkDownGo
@@ -91,6 +91,8 @@ targets:
     info:
       path: MarkDownGo/App/Info.plist
       properties:
+        # Version comes from MARKETING_VERSION in the target settings; never hard-code it here.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
         NSPrincipalClass: NSApplication
         # The document type must carry NSDocumentClass, otherwise NSDocumentController has no
         # creatable class and "new document" fails. CFBundleTypeExtensions also catches .md files
@@ -136,7 +138,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.sparkconch.MarkDownGo.quicklook
         PRODUCT_NAME: MarkDownGoQuickLook
-        MARKETING_VERSION: 0.1.0
+        MARKETING_VERSION: 0.2.0
         CURRENT_PROJECT_VERSION: 1
         GENERATE_INFOPLIST_FILE: NO
         SKIP_INSTALL: YES
