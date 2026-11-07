@@ -24,6 +24,10 @@ settings:
     ENABLE_HARDENED_RUNTIME: NO
     SWIFT_STRICT_CONCURRENCY: minimal
     DEAD_CODE_STRIPPING: YES
+  # DEBUG guards the smoke hook; Release builds must not contain it.
+  configs:
+    Debug:
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
 
 targets:
   MarkDownGoCore:
@@ -50,33 +54,49 @@ targets:
       - path: MarkDownGo/Resources
         excludes:
           - "preview/**"
+          - "Themes/**"
       - path: MarkDownGo/Resources/preview
+        type: folder
+        buildPhase: resources
+      - path: MarkDownGo/Resources/Themes
         type: folder
         buildPhase: resources
     dependencies:
       - target: MarkDownGoCore
+      - target: MarkDownGoQuickLook
+        embed: true
       - sdk: WebKit.framework
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.sparkconch.MarkDownGo
         PRODUCT_NAME: MarkDownGo
-        MARKETING_VERSION: 0.1.0
+        MARKETING_VERSION: 0.2.0
         CURRENT_PROJECT_VERSION: 1
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: MarkDownGo
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
-        INFOPLIST_KEY_NSHumanReadableCopyright: "GPL-3.0 · MarkDownGo contributors"
+        INFOPLIST_KEY_NSHumanReadableCopyright: "SparkConch"
         INFOPLIST_KEY_NSQuitAlwaysKeepsWindows: NO
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
         COMBINE_HIDPI_IMAGES: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # Warnings are defects; keep the build honest (see SPEC §3 implementation notes).
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+        # Compile with relative source paths so Swift metadata cannot embed /Users/<you>/...;
+        # scripts/strip-and-sign.sh remains as the belt to this braces.
+        OTHER_SWIFT_FLAGS: "$(inherited) -file-compilation-dir $(SRCROOT)"
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
     info:
       path: MarkDownGo/App/Info.plist
       properties:
+        # Version comes from MARKETING_VERSION in the target settings; never hard-code it here.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
         NSPrincipalClass: NSApplication
-        # 文档类型必须带 NSDocumentClass，否则 NSDocumentController 拿不到可创建的类，
-        # 新建会失败；同时用 CFBundleTypeExtensions 兜住 .md 被 LaunchServices 判成
-        # 其它类型（例如 Sega ROM 的 .md）的情况。
+        # The document type must carry NSDocumentClass, otherwise NSDocumentController has no
+        # creatable class and "new document" fails. CFBundleTypeExtensions also catches .md files
+        # that LaunchServices would otherwise resolve to another owner (e.g. the Sega ROM .md).
         CFBundleDocumentTypes:
           - CFBundleTypeName: Markdown Document
             CFBundleTypeRole: Editor
@@ -93,6 +113,41 @@ targets:
             UTTypeTagSpecification:
               public.filename-extension: [md, markdown, mdown, mkd, mkdn]
               public.mime-type: [text/markdown]
+
+  MarkDownGoQuickLook:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: MarkDownGo/QuickLook
+        excludes:
+          - "Info.plist"
+      # Shared with the app so the Finder preview renders through exactly the same shell,
+      # theme injection and custom scheme — no second implementation to drift.
+      - path: MarkDownGo/App/PreviewScheme.swift
+      - path: MarkDownGo/Resources/Themes
+        type: folder
+        buildPhase: resources
+      - path: MarkDownGo/Resources/preview
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - target: MarkDownGoCore
+      - sdk: WebKit.framework
+      - sdk: Quartz.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.sparkconch.MarkDownGo.quicklook
+        PRODUCT_NAME: MarkDownGoQuickLook
+        MARKETING_VERSION: 0.2.0
+        CURRENT_PROJECT_VERSION: 1
+        GENERATE_INFOPLIST_FILE: NO
+        SKIP_INSTALL: YES
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+        OTHER_SWIFT_FLAGS: "$(inherited) -file-compilation-dir $(SRCROOT)"
+        # The extension's Info.plist is hand-written (NSExtension + QL attributes); xcodegen's
+        # `info:` would regenerate it and drop the keys it doesn't model.
+        INFOPLIST_FILE: MarkDownGo/QuickLook/Info.plist
+        CODE_SIGN_ENTITLEMENTS: MarkDownGo/QuickLook/MarkDownGoQuickLook.entitlements
 
   MarkDownGoTests:
     type: bundle.unit-test

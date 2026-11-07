@@ -12,6 +12,7 @@ macOS 上的 Markdown 编辑器。
 - 源码本身就带样式：标题按层级改字号和颜色，代码块等宽，引用、列表、链接分色，打字时实时更新
 - WYSIWYG 模式藏掉 `#`、`**` 这类标记；光标所在行仍然显示源码，改结构不用猜
 - 预览支持表格、任务列表、删除线、脚注，以及 KaTeX 公式和 Mermaid 图。资源都打在 App 里，不联网
+- 访达里按空格就能预览：三档可选——渲染后（最全）、所见即所得（原生排版，秒开）、源码
 - 左侧大纲，点标题跳到对应位置
 - 编辑即保存。想丢掉这次改动，用「文件 ▸ 恢复到打开时」
 - 粘贴或拖入图片，存到文档旁边的 `images/`，或内联成 base64，在设置里选
@@ -65,6 +66,7 @@ make icon      # 从 design/logo.svg 重新生成各尺寸图标
 - The source is styled: headings change size and color by level, code is monospaced, quotes, lists and links are color coded, live while typing
 - WYSIWYG hides the `#` and `**` markers. The line holding the caret still shows them, so structure stays editable
 - Preview handles tables, task lists, strikethrough, footnotes, KaTeX math and Mermaid diagrams. Everything ships inside the app; nothing is fetched
+- Space bar preview in Finder, three ways: rendered (fullest), WYSIWYG (native type, instant), source
 - Outline sidebar. Click a heading to jump
 - Saves as you type. Use File ▸ Revert to Opened State to drop the session's edits
 - Paste or drop an image: saved to `images/` next to the document, or inlined as base64 — your choice in Settings

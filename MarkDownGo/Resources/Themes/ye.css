@@ -1,0 +1,14 @@
+/* 夜读 — 深炭底色、米白正文，为暗环境长时间阅读准备。
+   纯中性灰阶，不用蓝紫冷调，避免与系统暗色混淆。 */
+:root {
+  --paper: #17171B;
+  --ink: #E9E5DB;
+  --ink-soft: #9A958A;
+  --rule: #2E2E34;
+  --accent: #C9A96A;
+  --code-bg: #202027;
+  --mark-bg: #3A3427;
+  --serif: "Songti SC", "STSong", "Source Han Serif SC", Georgia, serif;
+  --sans: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+}

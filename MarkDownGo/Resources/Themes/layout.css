@@ -1,0 +1,96 @@
+/* 三套主题共用的排版骨架：只读变量，不含配色。
+   标题用衬线体、正文无衬线，标题层级靠字号与字重递进，不靠颜色堆叠。 */
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 28px 34px 64px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.75;
+  word-wrap: break-word;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 正文首屏：整篇内容居中，行长控制在舒适区 */
+main, #content { max-width: 44em; margin: 0 auto; }
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--serif);
+  font-weight: 600;
+  line-height: 1.35;
+  margin: 1.9em 0 0.7em;
+  letter-spacing: -0.01em;
+}
+h1 { font-size: 1.85em; margin-top: 0.4em; }
+h2 { font-size: 1.45em; padding-bottom: 0.28em; border-bottom: 1px solid var(--rule); }
+h3 { font-size: 1.2em; }
+h4 { font-size: 1.05em; }
+h5, h6 { font-size: 1em; color: var(--ink-soft); }
+
+p { margin: 0.85em 0; }
+
+a { color: var(--accent); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+a:hover { border-bottom-color: var(--accent); }
+
+strong { font-weight: 650; }
+em { font-style: italic; }
+del { color: var(--ink-soft); }
+mark { background: var(--mark-bg); color: var(--ink); padding: 0.05em 0.25em; border-radius: 3px; }
+
+code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--code-bg);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+}
+pre {
+  background: var(--code-bg);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 14px 16px;
+  overflow-x: auto;
+  line-height: 1.55;
+}
+pre code { background: none; padding: 0; font-size: 0.85em; }
+
+blockquote {
+  margin: 1.1em 0;
+  padding: 0.2em 0 0.2em 1em;
+  border-left: 3px solid var(--accent);
+  color: var(--ink-soft);
+}
+blockquote p { margin: 0.4em 0; }
+
+ul, ol { padding-left: 1.4em; margin: 0.85em 0; }
+li { margin: 0.3em 0; }
+li::marker { color: var(--ink-soft); }
+.task-list-item { list-style: none; margin-left: -1.3em; }
+input[type="checkbox"] { margin-right: 0.45em; accent-color: var(--accent); }
+
+table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: 0.94em; }
+th, td { border: 1px solid var(--rule); padding: 7px 12px; text-align: left; }
+th { background: color-mix(in srgb, var(--ink) 4%, transparent); font-weight: 600; }
+
+img { max-width: 100%; height: auto; border-radius: 6px; }
+
+hr {
+  border: none;
+  border-top: 1px solid var(--rule);
+  margin: 2.2em 0;
+}
+
+.footnotes {
+  margin-top: 3em;
+  padding-top: 1em;
+  border-top: 1px solid var(--rule);
+  font-size: 0.9em;
+  color: var(--ink-soft);
+}
+
+.katex { font-size: 1.02em; }
+.katex-display { margin: 1.3em 0; overflow-x: auto; overflow-y: hidden; }
+.mermaid { margin: 1.4em 0; text-align: center; }

@@ -15,6 +15,9 @@ final class PreviewView: WKWebView, WKNavigationDelegate, WKScriptMessageHandler
         let configuration = WKWebViewConfiguration()
         configuration.setURLSchemeHandler(scheme, forURLScheme: PreviewScheme.scheme)
         self.scheme = scheme
+        let theme = Preferences.theme
+        scheme.themeCSS = theme.css()
+        scheme.isDarkTheme = (theme.id == "ye")
         super.init(frame: .zero, configuration: configuration)
         navigationDelegate = self
         underPageBackgroundColor = .textBackgroundColor
@@ -33,14 +36,16 @@ final class PreviewView: WKWebView, WKNavigationDelegate, WKScriptMessageHandler
 
     func scrollToRatio(_ ratio: Double) {
         guard ready else { return }
-        evaluateJavaScript("suppressScrollReporting(180); scrollToRatio(\(ratio))", completionHandler: nil)
+        evaluateJavaScript("suppressScrollReporting(\(Layout.scrollSuppressMS)); scrollToRatio(\(ratio))", completionHandler: nil)
     }
 
+    #if DEBUG
     /// Test affordance: scroll without suppressing the report, i.e. behave like a user scroll.
     func debugSimulateUserScroll(to ratio: Double) {
         let clamped = min(1, max(0, ratio))
         evaluateJavaScript("window.scrollTo(0, \(clamped) * (document.documentElement.scrollHeight - window.innerHeight))", completionHandler: nil)
     }
+    #endif
 
     func currentScrollRatio(_ completion: @escaping (Double) -> Void) {
         evaluateJavaScript("currentScrollRatio()") { value, _ in
@@ -53,14 +58,18 @@ final class PreviewView: WKWebView, WKNavigationDelegate, WKScriptMessageHandler
         onScroll?(ratio)
     }
 
-    func scrollToHeading(_ ordinal: Int) {
-        guard ready else { return }
-        evaluateJavaScript("scrollToHeading(\(ordinal))", completionHandler: nil)
-    }
-
     func reloadChrome() {
         ready = false
         load(URLRequest(url: PreviewScheme.pageURL))
+    }
+
+    /// Re-render with a new theme: swap the stylesheet the scheme serves, then reload the shell so
+    /// the new tokens apply to already-rendered content.
+    func applyTheme() {
+        let theme = Preferences.theme
+        scheme.themeCSS = theme.css()
+        scheme.isDarkTheme = (theme.id == "ye")
+        reloadChrome()
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -69,7 +78,26 @@ final class PreviewView: WKWebView, WKNavigationDelegate, WKScriptMessageHandler
     }
 
     private func inject(_ html: String) {
-        evaluateJavaScript("render(\(Self.javaScriptString(html)))", completionHandler: nil)
+        call("try { render(html); return true } catch (e) { return String(e) }", arguments: ["html": html])
+    }
+
+    /// Structured bridge: `callAsyncJavaScript` gives named arguments, a real completion, and
+    /// promise-backed errors instead of string-concatenated JavaScript. A render failure degrades
+    /// the preview only — the editor must never care (same discipline as the web-side try/catch).
+    private func call(_ body: String, arguments: [String: Any], completion: ((Result<Any?, Error>) -> Void)? = nil) {
+        guard ready else { return }
+        callAsyncJavaScript(body, arguments: arguments, in: nil, in: .page) { result in
+            switch result {
+            case .failure(let error):
+                // A failed render degrades the preview only; log loudly in Debug, stay quiet in Release.
+                #if DEBUG
+                FileHandle.standardError.write(Data("preview bridge: \(error)\n".utf8))
+                #endif
+            case .success:
+                break
+            }
+            completion?(result.map { $0 })
+        }
     }
 
     /// Numbers headings in document order so the editor's caret→heading count maps to an anchor.

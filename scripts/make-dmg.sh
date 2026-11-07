@@ -2,7 +2,7 @@
 # Produce dist/MarkDownGo-<version>-arm64.dmg from the Release build (ad-hoc signed, unnotarized).
 # The volume holds the app plus an Applications folder shortcut, the usual macOS drag-to-install shape.
 set -euo pipefail
-VERSION="${1:-0.1.0}"
+VERSION="${1:-0.2.0}"
 APP="build/Build/Products/Release/MarkDownGo.app"
 OUT="dist/MarkDownGo-${VERSION}-arm64.dmg"
 [ -d "$APP" ] || { echo "missing $APP — run make build first"; exit 1; }

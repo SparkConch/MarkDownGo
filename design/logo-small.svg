@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- MarkDownGo mark. Small-size artwork, used at 16/32/64px (same geometry, heavier shaft/arrow).
+     The plate and drop shadow are Apple's official macOS icon template layers
+     (design/official-plate.png, design/official-shadow.png), composited by scripts/render-icon.swift.
+     The mark is optically balanced: the arrow tip sits closer to the bottom edge than the crown does to
+     the top edge, because a thin point reads as smaller than a heavy flat bar (equal bounding-box gaps
+     look high). The ink centroid is not the target. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <g transform="translate(512 512) scale(0.8046875) translate(-512 -512)">
+    <g transform="translate(0 65.0)">
+      <path fill="#0B0B0A" d="M232 183 L392 183 L512 343 L632 183 L792 183 L792 632 L692 632 L692 262 L512 502 L332 262 L332 632 L232 632 Z"/>
+      <rect x="456.0" y="427.3" width="112" height="212.7" fill="#0B0B0A"/>
+      <polygon points="362,632 662,632 512,812" fill="#0B0B0A"/>
+    </g>
+  </g>
+</svg>

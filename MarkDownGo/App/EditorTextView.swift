@@ -13,7 +13,6 @@ final class EditorTextView: NSTextView, NSTextViewDelegate {
 
     var wysiwyg = false { didSet { restyle() } }
     private(set) var styled: StyledText = .empty
-    private(set) var headings: [Heading] = []
     private var visibleLine = -1
     private let imageStore = ImageStore()
     private let bodyStyle: NSMutableParagraphStyle
@@ -100,7 +99,6 @@ final class EditorTextView: NSTextView, NSTextViewDelegate {
 
     private func restyle() {
         styled = Styler.style(string)
-        headings = Outline.headings(in: string, styled: styled)
         let caret = selectedRange().location
         visibleLine = wysiwyg ? (styled.lines.isEmpty ? 0 : styled.lineIndex(forCharacter: caret)) : -1
         applyAll(visibleLine: visibleLine)

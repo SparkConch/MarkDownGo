@@ -5,6 +5,8 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindow: NSWindow?
     private var homeWindow: NSWindow?
+    /// Set when LaunchServices asks us to open a file during startup.
+    private var claimedByOpenRequest = false
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         Preferences.registerDefaults()
@@ -17,16 +19,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         applyAppearance()
-        showHome(nil)
+        mirrorPreferencesForExtension()
+        scheduleHomeIfUnclaimed()
+        // Warm the WebContent process right after launch; the first document then starts its
+        // preview against a live process instead of paying process spawn latency.
+        DispatchQueue.main.async { PreviewPool.shared.prewarm() }
+        #if DEBUG
         runSmokeHook()
+        #endif
         NotificationCenter.default.addObserver(
             self, selector: #selector(preferencesChanged(_:)),
             name: Preferences.didChange, object: nil
         )
     }
 
+    /// Mirrors the settings the QuickLook extension needs into the shared App Group. The extension
+    /// is sandboxed and cannot read our own UserDefaults domain.
+    private func mirrorPreferencesForExtension() {
+        Preferences.writeExtensionConfig()
+    }
+
     @objc private func preferencesChanged(_ note: Notification) {
         applyAppearance()
+        mirrorPreferencesForExtension()
+        // Menus and every open window re-read their strings; no relaunch.
+        NSApp.mainMenu = MainMenu.build()
+        for window in NSApp.windows {
+            (window.windowController as? DocumentWindowController)?.refreshLocalization()
+        }
     }
 
     /// One switch covers every window, the launcher, and the preview (WKWebView follows
@@ -39,25 +59,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Verification hook, inert unless `MDG_SMOKE` is set: creating and opening documents can only
+    #if DEBUG
+    /// Verification hook, inert unless `MDG_SMOKE` is set (and compiled out of Release builds): creating and opening documents can only
     /// be proven by launching the real app, so keep one way to drive it from a terminal.
     private func runSmokeHook() {
         let environment = ProcessInfo.processInfo.environment
         switch environment["MDG_SMOKE"] {
         case "layout":
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Layout.smokeLaunchDelay) {
                 _ = try? NSDocumentController.shared.openUntitledDocumentAndDisplay(true)
             }
         case "scroll":
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Layout.smokeLaunchDelay) {
                 guard let document = try? NSDocumentController.shared.openUntitledDocumentAndDisplay(true),
                       let controller = document.windowControllers.first as? DocumentWindowController else { return }
                 let long = (1...120).map { "## 标题 \($0)\n\n这是第 \($0) 段，用来验证源码与预览的滚动绑定。\n" }.joined(separator: "\n")
                 controller.editor.replaceText(long)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { controller.editor.debugScrollSmoke() }
             }
+        case "lang":
+            DispatchQueue.main.asyncAfter(deadline: .now() + Layout.smokeLaunchDelay) {
+                func report(_ tag: String) {
+                    let fileMenu = NSApp.mainMenu?.items.first { $0.submenu?.items.contains { $0.keyEquivalent == "o" } == true }
+                    let openItem = fileMenu?.submenu?.items.first { $0.keyEquivalent == "o" }?.title ?? "?"
+                    let viewMenu = NSApp.mainMenu?.items.first { $0.submenu?.items.contains { $0.keyEquivalent == "1" } == true }
+                    let modeItem = viewMenu?.submenu?.items.first { $0.keyEquivalent == "2" }?.title ?? "?"
+                    FileHandle.standardError.write(Data("SMOKE lang \(tag): open=\(openItem) split=\(modeItem) home=\(Localization.string("home.open"))\n".utf8))
+                }
+                UserDefaults.standard.set(InterfaceLanguage.english.rawValue, forKey: PreferenceKey.language)
+                Preferences.notifyChanged()
+                report("en")
+                UserDefaults.standard.set(InterfaceLanguage.chinese.rawValue, forKey: PreferenceKey.language)
+                Preferences.notifyChanged()
+                report("zh")
+            }
         case "new":
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Layout.smokeLaunchDelay) {
                 do {
                     let document = try NSDocumentController.shared.openUntitledDocumentAndDisplay(true)
                     FileHandle.standardError.write(Data("SMOKE new ok: \(document.displayName ?? "?")\n".utf8))
@@ -67,7 +104,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         case "open":
             guard let path = environment["MDG_SMOKE_FILE"] else { return }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Layout.smokeLaunchDelay) {
                 NSDocumentController.shared.openDocument(withContentsOf: URL(fileURLWithPath: path), display: true) { document, _, error in
                     let message = error.map { "SMOKE open failed: \($0)\n" } ?? "SMOKE open ok: \(document?.displayName ?? "?")\n"
                     FileHandle.standardError.write(Data(message.utf8))
@@ -77,12 +114,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             break
         }
     }
+    #endif
+
+    /// A document was requested during launch (Finder "Open With", `open -a`, drag onto the Dock
+    /// icon). The launcher must not appear at all in that case.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        claimedByOpenRequest = true
+        homeWindow?.orderOut(nil)
+        for url in urls {
+            NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { _, _, error in
+                if let error {
+                    FileHandle.standardError.write(Data("open failed for \(url.lastPathComponent): \(error)\n".utf8))
+                }
+            }
+        }
+        // Release the claim once the documents are on screen, so closing them later still returns
+        // to the launcher.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+            self?.claimedByOpenRequest = false
+        }
+    }
+
+    /// Shows the launcher only if nobody asked for a file. Runs after `homeRevealDelay` so the
+    /// open request from LaunchServices has landed; if a document window exists by then, stay out
+    /// of the way.
+    private func scheduleHomeIfUnclaimed() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + Layout.homeRevealDelay) { [weak self] in
+            guard let self, !self.claimedByOpenRequest else { return }
+            guard NSDocumentController.shared.documents.isEmpty else { return }
+            self.showHome(nil)
+        }
+    }
 
     /// The launcher replaces the "untitled document on launch" habit (SPEC §4).
     func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool { false }
 
+    // Launch always starts at the launcher: no window/state restoration, so a document left open
+    // in a previous session is never reopened behind the user's back.
+    func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { false }
+    func applicationShouldRestoreApplicationState(_ coder: NSCoder) -> Bool { false }
+    func applicationShouldSaveApplicationState(_ coder: NSCoder) -> Bool { false }
+
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if !flag { showHome(nil) }
+        if !flag, NSDocumentController.shared.documents.isEmpty { showHome(nil) }
         return true
     }
 
@@ -92,6 +166,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             window.title = "MarkDownGo"
             window.styleMask = [.titled, .closable]
             window.isReleasedWhenClosed = false
+            window.isRestorable = false
             window.isMovableByWindowBackground = true
             window.center()
             homeWindow = window
@@ -105,6 +180,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             window.title = L("menu.settings")
             window.styleMask = [.titled, .closable]
             window.isReleasedWhenClosed = false
+            window.isRestorable = false
             window.center()
             settingsWindow = window
         }

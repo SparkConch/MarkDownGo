@@ -105,7 +105,7 @@ enum MainMenu {
     }
 }
 
-/// Shorthand for a lookup that falls back to the key itself when a translation is missing.
+/// Shorthand for a lookup that follows the in-app language setting and falls back to the key.
 func L(_ key: String) -> String {
-    NSLocalizedString(key, comment: "")
+    Localization.string(key)
 }

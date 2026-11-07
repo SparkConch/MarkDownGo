@@ -1,3 +1,4 @@
+import MarkDownGoCore
 import WebKit
 
 /// Serves the preview over a custom scheme so everything (KaTeX fonts included) loads offline from
@@ -7,12 +8,24 @@ final class PreviewScheme: NSObject, WKURLSchemeHandler {
     static let pageURL = URL(string: "mdg-preview://page/index.html")!
     /// The currently rendered document body; the shell page is this plus the fixed bootstrap.
     var html = ""
+    /// Theme stylesheet injected into the shell at serve time.
+    var themeCSS = Theme.fallback.css()
+    /// Mermaid needs to know up front whether the paper is dark; CSS can't tell it.
+    var isDarkTheme = false
+    /// In the split pane the preview sits beside the editor, so its body padding is pulled in to
+    /// match the editor's textContainerInset. QuickLook and other hosts keep the theme's page
+    /// padding, which reads like a sheet of paper.
+    var compactPadding = true
 
     func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
         guard let url = urlSchemeTask.request.url else { return }
         let path = url.path
         if path == "/" || path == "/index.html" {
-            respond(urlSchemeTask, url: url, data: Data(Self.shell.utf8), mime: "text/html")
+            let page = Self.shellTemplate
+                .replacingOccurrences(of: "{{THEME_CSS}}", with: themeCSS)
+                .replacingOccurrences(of: "{{THEME_DARK}}", with: isDarkTheme ? "true" : "false")
+                .replacingOccurrences(of: "{{PANE_CSS}}", with: compactPadding ? Self.paneCSS : "")
+            respond(urlSchemeTask, url: url, data: Data(page.utf8), mime: "text/html")
             return
         }
         let prefix = "/vendor/"
@@ -57,9 +70,14 @@ final class PreviewScheme: NSObject, WKURLSchemeHandler {
         }
     }
 
-    /// The preview page: styles follow the system appearance, KaTeX renders `$…$`/`$$…$$`, and
-    /// ```mermaid fences become diagrams.
-    private static let shell = """
+    /// Split-pane override: keeps the preview's first line level with the editor's.
+    static let paneCSS = "body { padding: 16px 18px 60px !important; }"
+
+    /// The preview page. Visual styling is *not* here — `{{THEME_CSS}}` is replaced with the
+    /// selected theme's stylesheet (Resources/Themes/layout.css + {id}.css), so the in-app preview
+    /// and the Finder QuickLook preview render from exactly the same tokens. This shell only owns
+    /// behaviour: KaTeX for `$…$`, Mermaid for ```mermaid fences.
+    static let shellTemplate = """
     <!doctype html>
     <html>
     <head>
@@ -68,30 +86,9 @@ final class PreviewScheme: NSObject, WKURLSchemeHandler {
     <script src="/vendor/katex/katex.min.js"></script>
     <script src="/vendor/katex/contrib/auto-render.min.js"></script>
     <script src="/vendor/mermaid/mermaid.min.js"></script>
-    <style>
-      :root { color-scheme: light dark; }
-      /* Padding matches the editor's textContainerInset (18 horizontal / 16 vertical) so the two
-         panes start on the same line instead of a few points apart. */
-      body { margin: 0; padding: 16px 18px 60px; font: 15px/1.65 -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
-             color: canvas-text; background: canvas; word-wrap: break-word; }
-      h1,h2 { border-bottom: 1px solid color-mix(in srgb, canvas-text 12%, transparent); padding-bottom: .3em; }
-      h1 { font-size: 1.9em; } h2 { font-size: 1.5em; } h3 { font-size: 1.25em; }
-      a { color: #2563eb; text-decoration: none; } a:hover { text-decoration: underline; }
-      code { font: 87% ui-monospace, SFMono-Regular, Menlo, monospace; background: color-mix(in srgb, canvas-text 8%, transparent);
-             padding: .15em .35em; border-radius: 5px; }
-      pre { background: color-mix(in srgb, canvas-text 6%, transparent); border: 1px solid color-mix(in srgb, canvas-text 10%, transparent);
-            border-radius: 8px; padding: 12px 14px; overflow: auto; }
-      pre code { background: none; padding: 0; }
-      blockquote { margin: 0; padding: 2px 16px; border-left: 4px solid color-mix(in srgb, canvas-text 20%, transparent);
-                   color: color-mix(in srgb, canvas-text 70%, transparent); }
-      table { border-collapse: collapse; } th, td { border: 1px solid color-mix(in srgb, canvas-text 18%, transparent);
-             padding: 6px 12px; } th { background: color-mix(in srgb, canvas-text 6%, transparent); }
-      img { max-width: 100%; }
-      hr { border: none; border-top: 2px solid color-mix(in srgb, canvas-text 12%, transparent); }
-      .task-list-item { list-style: none; margin-left: -1.2em; }
-      .footnotes { color: color-mix(in srgb, canvas-text 60%, transparent); font-size: .9em; }
-      .mermaid { background: canvas; }
-    </style>
+    <style>{{THEME_CSS}}</style>
+    <style>{{PANE_CSS}}</style>
+    <script>window.__MDG_DARK__ = {{THEME_DARK}};</script>
     </head>
     <body>
     <div id="content"></div>
@@ -120,7 +117,7 @@ final class PreviewScheme: NSObject, WKURLSchemeHandler {
         });
       } catch (e) {}
       try {
-        mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default' });
+        mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: (document.querySelector('body') && getComputedStyle(document.body).backgroundColor.match(/rgba?\\((\\d+), ?(\\d+), ?(\\d+)/) || [0,255,255,255]).slice(1,4).reduce((a,b)=>a+parseInt(b),0) < 300 ? 'dark' : 'default' });
         mermaid.run({ querySelector: '.mermaid' });
       } catch (e) {}
     };
@@ -141,10 +138,6 @@ final class PreviewScheme: NSObject, WKURLSchemeHandler {
         window.webkit.messageHandlers.scroll.postMessage(window.currentScrollRatio());
       }
     }, { passive: true });
-    window.scrollToHeading = function (n) {
-      var el = document.getElementById('h-' + n);
-      if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 28, behavior: 'smooth' });
-    };
     </script>
     </body>
     </html>
