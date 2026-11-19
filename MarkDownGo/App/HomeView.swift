@@ -80,35 +80,53 @@ struct HomeView: View {
     }
 
     private func fetchRow(_ url: URL) -> some View {
-        Button { open(url) } label: {
-            HStack(spacing: 10) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(url.deletingPathExtension().lastPathComponent)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(Palette.ink)
-                    Text(url.deletingLastPathComponent().path)
-                        .font(.system(size: 11))
+        // The row is not one big button: the remove control must not also open the document.
+        HStack(spacing: 10) {
+            Button { open(url) } label: {
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(url.deletingPathExtension().lastPathComponent)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Palette.ink)
+                        Text(url.deletingLastPathComponent().path)
+                            .font(.system(size: 11))
+                            .foregroundStyle(Palette.muted)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    Spacer(minLength: 8)
+                    Text("MD")
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
                         .foregroundStyle(Palette.muted)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Palette.hairline.opacity(0.45)))
                 }
-                Spacer(minLength: 8)
-                Text("MD")
-                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                RecentDocuments.remove(url)
+                reload()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(Palette.muted)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Palette.hairline.opacity(0.45)))
+                    .frame(width: 18, height: 18)
+                    .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Palette.hairline.opacity(hovered == url ? 0.5 : 0)))
+                    .contentShape(Rectangle())
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(hovered == url ? Palette.hairline.opacity(0.35) : Color.clear)
-            }
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .help(L("home.recent.remove"))
+            .accessibilityLabel(L("home.recent.remove"))
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(hovered == url ? Palette.hairline.opacity(0.35) : Color.clear)
+        }
         .onHover { inside in
             if inside { hovered = url } else if hovered == url { hovered = nil }
         }

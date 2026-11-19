@@ -52,6 +52,7 @@
 "home.new" = "New File";
 "home.recent" = "Recent";
 "home.recent.empty" = "No files opened yet";
+"home.recent.remove" = "Remove from Recent";
 
 "settings.appearance" = "Appearance";
 "settings.appearance.system" = "System";
