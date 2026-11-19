@@ -77,6 +77,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 controller.editor.replaceText(long)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { controller.editor.debugScrollSmoke() }
             }
+        case "align":
+            DispatchQueue.main.asyncAfter(deadline: .now() + Layout.smokeLaunchDelay) {
+                guard let document = try? NSDocumentController.shared.openUntitledDocumentAndDisplay(true),
+                      let controller = document.windowControllers.first as? DocumentWindowController else { return }
+                // A long fenced block renders far shorter than it types: the exact shape that
+                // breaks ratio-based syncing.
+                let wide = String(repeating: "码", count: 60)
+                let block = Array(repeating: wide, count: 120).joined(separator: "\n")
+                let tail = (1...150).map { "## 小节 \($0)\n\n这是第 \($0) 段正文，包含 `代码` 与**强调**。" }.joined(separator: "\n\n")
+                controller.editor.replaceText("# 文档开头\n\n```text\n" + block + "\n```\n\n## 对齐目标\n\n" + tail + "\n")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { controller.editor.debugAlignSmoke() }
+            }
         case "lang":
             DispatchQueue.main.asyncAfter(deadline: .now() + Layout.smokeLaunchDelay) {
                 func report(_ tag: String) {
