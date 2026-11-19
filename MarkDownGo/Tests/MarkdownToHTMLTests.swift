@@ -8,6 +8,13 @@ final class MarkdownToHTMLTests: XCTestCase {
         XCTAssertTrue(html.contains("<td"))
     }
 
+    func testTableKeepsAlignmentAndHandlesNoBlankLineAroundIt() {
+        let html = MarkdownToHTML.render("paragraph\n| left | right |\n| :--- | ---: |\n| a | 42 |\nafter")
+        XCTAssertTrue(html.contains("<table"), html)
+        XCTAssertTrue(html.contains("<th align=\"left\">left</th>"), html)
+        XCTAssertTrue(html.contains("<td align=\"right\">42</td>"), html)
+    }
+
     func testStrikethrough() {
         XCTAssertTrue(MarkdownToHTML.render("~~gone~~").contains("<del>"))
     }

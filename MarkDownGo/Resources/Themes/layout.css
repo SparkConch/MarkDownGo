@@ -71,7 +71,9 @@ li::marker { color: var(--ink-soft); }
 .task-list-item { list-style: none; margin-left: -1.3em; }
 input[type="checkbox"] { margin-right: 0.45em; accent-color: var(--accent); }
 
-table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: 0.94em; }
+/* Wide GFM tables stay inside the reading column and scroll horizontally. */
+.table-scroll { max-width: 100%; overflow-x: auto; margin: 1.2em 0; }
+.table-scroll table { border-collapse: collapse; width: max-content; min-width: 100%; margin: 0; font-size: 0.94em; }
 th, td { border: 1px solid var(--rule); padding: 7px 12px; text-align: left; }
 th { background: color-mix(in srgb, var(--ink) 4%, transparent); font-weight: 600; }
 
