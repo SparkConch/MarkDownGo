@@ -101,9 +101,19 @@ final class PreviewScheme: NSObject, WKURLSchemeHandler {
         code.parentElement.replaceWith(div);
       });
     }
+    function wrapTables(root) {
+      root.querySelectorAll('table').forEach(function (table) {
+        if (table.parentElement.classList.contains('table-scroll')) return;
+        var wrapper = document.createElement('div');
+        wrapper.className = 'table-scroll';
+        table.parentNode.insertBefore(wrapper, table);
+        wrapper.appendChild(table);
+      });
+    }
     window.render = function (html) {
       var root = document.getElementById('content');
       root.innerHTML = html;
+      wrapTables(root);
       convertMermaid(root);
       try {
         renderMathInElement(root, {
@@ -121,7 +131,44 @@ final class PreviewScheme: NSObject, WKURLSchemeHandler {
         mermaid.run({ querySelector: '.mermaid' });
       } catch (e) {}
     };
-    // Scroll binding: the preview reports its own ratio and accepts the editor's ratio.
+    // Scroll binding. Ratio-only syncing drifts whenever the two panes disagree about height
+    // (a long fenced block types tall and renders short), so positions are exchanged as
+    // "heading index + fraction into that section" and interpolated against real anchor offsets.
+    window.__anchors = function () {
+      var nodes = document.querySelectorAll('[id^=h-]');
+      var out = [];
+      for (var i = 0; i < nodes.length; i++) {
+        out.push(nodes[i].getBoundingClientRect().top + window.scrollY);
+      }
+      return out;
+    };
+    window.scrollToSection = function (index, fraction) {
+      var tops = window.__anchors();
+      var max = document.documentElement.scrollHeight - window.innerHeight;
+      if (max <= 0) return;
+      var y;
+      if (!tops.length) {
+        y = Math.max(0, Math.min(1, fraction)) * max;
+      } else {
+        var i = Math.max(0, Math.min(tops.length - 1, index));
+        var start = tops[i];
+        var end = i + 1 < tops.length ? tops[i + 1] : document.documentElement.scrollHeight;
+        y = start + Math.max(0, Math.min(1, fraction)) * Math.max(0, end - start);
+      }
+      window.scrollTo(0, Math.max(0, Math.min(max, y)));
+    };
+    window.currentSection = function () {
+      var tops = window.__anchors();
+      var max = document.documentElement.scrollHeight - window.innerHeight;
+      var y = window.scrollY;
+      if (!tops.length || max <= 0) return { index: 0, fraction: max > 0 ? y / max : 0 };
+      var i = 0;
+      while (i + 1 < tops.length && tops[i + 1] <= y) i++;
+      var start = tops[i];
+      var end = i + 1 < tops.length ? tops[i + 1] : document.documentElement.scrollHeight;
+      var span = Math.max(1, end - start);
+      return { index: i, fraction: Math.max(0, Math.min(1, (y - start) / span)) };
+    };
     window.scrollToRatio = function (f) {
       var max = document.documentElement.scrollHeight - window.innerHeight;
       if (max > 0) window.scrollTo(0, Math.max(0, Math.min(1, f)) * max);
@@ -135,7 +182,7 @@ final class PreviewScheme: NSObject, WKURLSchemeHandler {
     window.addEventListener('scroll', function () {
       if (Date.now() < __suppressUntil) return;
       if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.scroll) {
-        window.webkit.messageHandlers.scroll.postMessage(window.currentScrollRatio());
+        window.webkit.messageHandlers.scroll.postMessage(window.currentSection());
       }
     }, { passive: true });
     </script>

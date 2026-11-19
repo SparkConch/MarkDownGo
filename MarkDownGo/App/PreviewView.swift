@@ -4,8 +4,14 @@ import MarkDownGoCore
 /// The live preview: a WKWebView fed over `mdg-preview://`, updated in place (no reload flicker)
 /// with the HTML cmark renders.
 final class PreviewView: WKWebView, WKNavigationDelegate, WKScriptMessageHandler {
-    /// Fired when the user scrolls the preview; carries its scroll ratio (0…1).
-    var onScroll: ((Double) -> Void)?
+    /// A position inside the document: which heading section, and how far into it (0…1).
+    struct Section: Equatable {
+        var index: Int
+        var fraction: Double
+    }
+
+    /// Fired when the user scrolls the preview.
+    var onScroll: ((Section) -> Void)?
     private let scheme: PreviewScheme
     private var ready = false
     private var pending: String?
@@ -39,11 +45,29 @@ final class PreviewView: WKWebView, WKNavigationDelegate, WKScriptMessageHandler
         evaluateJavaScript("suppressScrollReporting(\(Layout.scrollSuppressMS)); scrollToRatio(\(ratio))", completionHandler: nil)
     }
 
+    /// Scroll so `section` sits at the same relative place as in the editor.
+    func scrollToSection(_ section: Section) {
+        guard ready else { return }
+        let fraction = min(1, max(0, section.fraction))
+        evaluateJavaScript("suppressScrollReporting(\(Layout.scrollSuppressMS)); scrollToSection(\(section.index), \(fraction))", completionHandler: nil)
+    }
+
     #if DEBUG
     /// Test affordance: scroll without suppressing the report, i.e. behave like a user scroll.
     func debugSimulateUserScroll(to ratio: Double) {
         let clamped = min(1, max(0, ratio))
         evaluateJavaScript("window.scrollTo(0, \(clamped) * (document.documentElement.scrollHeight - window.innerHeight))", completionHandler: nil)
+    }
+
+    /// Distance from the viewport top to a heading anchor: the alignment signal for MDG_SMOKE=align.
+    /// Must run in `.page` — `render` injects there, and the default isolated world sees another DOM.
+    func debugHeadingOffset(_ index: Int, _ completion: @escaping (Double) -> Void) {
+        let script = "var e=document.getElementById('h-' + idx);"
+            + "return e ? e.getBoundingClientRect().top : null"
+        callAsyncJavaScript(script, arguments: ["idx": index], in: nil, in: .page) { result in
+            let value = try? result.get()
+            completion((value as? NSNumber)?.doubleValue ?? .nan)
+        }
     }
     #endif
 
@@ -54,8 +78,10 @@ final class PreviewView: WKWebView, WKNavigationDelegate, WKScriptMessageHandler
     }
 
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
-        guard message.name == "scroll", let ratio = (message.body as? NSNumber)?.doubleValue else { return }
-        onScroll?(ratio)
+        guard message.name == "scroll", let body = message.body as? [String: Any],
+              let index = (body["index"] as? NSNumber)?.intValue,
+              let fraction = (body["fraction"] as? NSNumber)?.doubleValue else { return }
+        onScroll?(Section(index: index, fraction: fraction))
     }
 
     func reloadChrome() {

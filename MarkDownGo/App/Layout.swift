@@ -13,6 +13,9 @@ enum Layout {
     /// Editor takes this share of the space right of the outline (divider 1).
     static let editorShare: CGFloat = 0.56
 
+    /// Preview pane floor while visible; lifted to 0 when the mode hides it.
+    static let previewMinThickness: CGFloat = 260
+
     /// Preview refresh debounce. Sub-250 ms reads as instant on keystrokes while capping cmark
     /// renders to ~4/s on long documents.
     static let previewDebounce: TimeInterval = 0.25

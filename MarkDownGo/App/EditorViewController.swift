@@ -32,7 +32,7 @@ final class EditorViewController: NSSplitViewController, NSMenuItemValidation {
         preview = PreviewPool.shared.take()
         editorView.setMarkdown(document.text)
         preview.update(markdown: document.text)
-        outline.reload(Outline.headings(in: editorView.string, styled: editorView.styled))
+        reloadOutline()
 
         editorView.onChange = { [weak self] text in
             self?.document.editorDidChange(text)
@@ -58,11 +58,11 @@ final class EditorViewController: NSSplitViewController, NSMenuItemValidation {
             self, selector: #selector(editorDidScroll(_:)),
             name: NSView.boundsDidChangeNotification, object: scrollView.contentView
         )
-        preview.onScroll = { [weak self] ratio in
+        preview.onScroll = { [weak self] section in
             guard let self, self.mode == .split else { return }
             guard Date().timeIntervalSince(self.lastEditorScrollAt) > Layout.scrollGuard else { return }
             self.lastPreviewScrollAt = Date()
-            self.editorView.scrollToRatio(ratio)
+            self.editorView.scrollToSection(section, headings: self.headings)
         }
 
         // Panes sit side by side: vertical divider, set before items are added.
@@ -82,7 +82,7 @@ final class EditorViewController: NSSplitViewController, NSMenuItemValidation {
         addSplitViewItem(editorItem)
 
         let previewPane = NSSplitViewItem(viewController: StaticViewController(view: preview))
-        previewPane.minimumThickness = 260
+        previewPane.minimumThickness = Layout.previewMinThickness
         previewPane.holdingPriority = NSLayoutConstraint.Priority(249)
         addSplitViewItem(previewPane)
         previewItem = previewPane
@@ -123,7 +123,7 @@ final class EditorViewController: NSSplitViewController, NSMenuItemValidation {
     func replaceText(_ text: String) {
         editorView.setMarkdown(text)
         preview.update(markdown: text)
-        outline.reload(Outline.headings(in: editorView.string, styled: editorView.styled))
+        reloadOutline()
     }
 
     // MARK: - Modes
@@ -137,15 +137,28 @@ final class EditorViewController: NSSplitViewController, NSMenuItemValidation {
     }
 
     func setMode(_ newMode: Mode, animated: Bool = true) {
+        let widthChanged = (mode == .split) != (newMode == .split)
         mode = newMode
         editorView.wysiwyg = (newMode == .wysiwyg)
-        let collapsed = (newMode != .split)
-        if animated {
-            previewItem?.animator().isCollapsed = collapsed
-        } else {
-            previewItem?.isCollapsed = collapsed
+        // `isCollapsed` and a synchronous `setPosition` both re-lay out every pane (~0.5 s on long
+        // documents). Hide the preview and move the divider on the next turn instead, so the switch
+        // paints immediately and the reflow happens after it.
+        let showPreview = (newMode == .split)
+        preview.isHidden = !showPreview
+        previewItem?.maximumThickness = showPreview ? .greatestFiniteMagnitude : 0
+        previewItem?.minimumThickness = showPreview ? Layout.previewMinThickness : 0
+        // Moving the divider is the expensive part (~0.5 s: it re-lays out every pane). Do it after
+        // the switch has been painted so the mode change itself feels immediate.
+        let target = showPreview
+            ? Layout.outlineWidth + (view.bounds.width - Layout.outlineWidth) * Layout.editorShare
+            : view.bounds.width
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.mode == newMode, self.positioned else { return }
+            self.splitView.setPosition(target, ofDividerAt: 1)
         }
-        if newMode == .split, positioned { splitView.setPosition(view.bounds.width * 0.55, ofDividerAt: 1) }
+        // Heading offsets only move when the editor's width moves; recomputing them lays out the
+        // whole document, so keep the cache across source↔WYSIWYG switches.
+        if widthChanged { editorView.invalidateHeadingTops() }
         modeDidChange?(newMode)
     }
 
@@ -156,10 +169,19 @@ final class EditorViewController: NSSplitViewController, NSMenuItemValidation {
         debounce = Timer.scheduledTimer(withTimeInterval: Layout.previewDebounce, repeats: false) { [weak self] _ in
             guard let self else { return }
             self.preview.update(markdown: text)
-            self.outline.reload(Outline.headings(in: self.editorView.string, styled: self.editorView.styled))
+            self.reloadOutline()
         }
     }
     private var debounce: Timer?
+
+    /// Heading list shared by the outline and the scroll mapping; recomputed only when text changes.
+    private var headings: [Heading] = []
+
+    private func reloadOutline() {
+        headings = Outline.headings(in: editorView.string, styled: editorView.styled)
+        editorView.invalidateHeadingTops()
+        outline.reload(headings)
+    }
 
     @objc private func preferencesChanged(_ note: Notification) {
         editorView.applyPreferences()
@@ -175,7 +197,7 @@ final class EditorViewController: NSSplitViewController, NSMenuItemValidation {
         guard mode == .split else { return }
         guard Date().timeIntervalSince(lastPreviewScrollAt) > Layout.scrollGuard else { return }
         lastEditorScrollAt = Date()
-        preview.scrollToRatio(editorView.scrollRatio)
+        preview.scrollToSection(editorView.currentSection(headings: headings))
     }
 
     #if DEBUG
@@ -192,6 +214,54 @@ final class EditorViewController: NSSplitViewController, NSMenuItemValidation {
                 }
             }
         }
+    }
+
+    /// MDG_SMOKE=align: measure heading alignment across the panes and mode-switch cost.
+    /// Ratio-only syncing looks fine on uniform prose and drifts badly once a long code block
+    /// makes the two panes' heights disagree, so assert on the heading, not on the ratio.
+    func debugAlignSmoke() {
+        func report(_ line: String) { FileHandle.standardError.write(Data((line + "\n").utf8)) }
+        let headings = Outline.headings(in: editorView.string, styled: editorView.styled)
+        guard let targetIndex = headings.firstIndex(where: { $0.title == "对齐目标" }) else {
+            report("SMOKE align missing target"); return
+        }
+        let anchor = targetIndex + 1
+        func editorY() -> CGFloat {
+            guard let manager = editorView.layoutManager else { return 0 }
+            let location = headings[targetIndex].lineStart
+            manager.ensureLayout(forCharacterRange: NSRange(location: location, length: 1))
+            let glyph = manager.glyphIndexForCharacter(at: location)
+            return editorView.textContainerOrigin.y
+                + manager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil).minY
+        }
+        func measure(_ attempt: Int) {
+            self.preview.scrollToRatio(0)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                self.editorView.scrollToOffset(editorY())
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    self.preview.debugHeadingOffset(anchor) { offset in
+                        if offset.isNaN, attempt < 8 {
+                            measure(attempt + 1)
+                            return
+                        }
+                        report("SMOKE align editor→preview heading offset=\(String(format: "%.0f", offset))pt")
+                        for (from, to) in [(Mode.split, Mode.source), (.source, .split), (.source, .wysiwyg), (.wysiwyg, .split)] {
+                            var samples: [Double] = []
+                            for _ in 0..<3 {
+                                self.setMode(from, animated: false)
+                                self.view.layoutSubtreeIfNeeded()
+                                let start = ProcessInfo.processInfo.systemUptime
+                                self.setMode(to, animated: false)
+                                self.view.layoutSubtreeIfNeeded()
+                                samples.append((ProcessInfo.processInfo.systemUptime - start) * 1000)
+                            }
+                            report("SMOKE mode \(from)→\(to) median=\(String(format: "%.1f", samples.sorted()[1]))ms")
+                        }
+                    }
+                }
+            }
+        }
+        measure(0)
     }
     #endif
 
