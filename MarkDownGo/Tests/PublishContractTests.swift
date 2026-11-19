@@ -38,6 +38,15 @@ final class PublishContractTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(woff2.count, 16, "KaTeX renders broken glyphs without its fonts")
     }
 
+    func testRenderedTablesAreContainedAndScrollableInBothPreviews() throws {
+        let css = try read("MarkDownGo/Resources/Themes/layout.css")
+        XCTAssertTrue(css.contains(".table-scroll { max-width: 100%; overflow-x: auto;"))
+        XCTAssertTrue(css.contains(".table-scroll table { border-collapse: collapse; width: max-content; min-width: 100%;"))
+        for path in ["MarkDownGo/App/PreviewScheme.swift", "MarkDownGo/QuickLook/PreviewProvider.swift"] {
+            XCTAssertTrue(try read(path).contains("function wrapTables(root)"), "\(path) must wrap wide tables")
+        }
+    }
+
     func testPreviewShellHasNoExternalReferences() throws {
         let shell = try read("MarkDownGo/App/PreviewScheme.swift")
         for banned in ["http://", "https://"] {

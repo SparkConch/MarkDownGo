@@ -117,7 +117,17 @@ final class PreviewProvider: NSViewController, QLPreviewingController {
         <script>
         window.__MDG_DARK__ = \(dark ? "true" : "false");
         (function () {
+        function wrapTables(root) {
+          root.querySelectorAll('table').forEach(function (table) {
+            if (table.parentElement.classList.contains('table-scroll')) return;
+            var wrapper = document.createElement('div');
+            wrapper.className = 'table-scroll';
+            table.parentNode.insertBefore(wrapper, table);
+            wrapper.appendChild(table);
+          });
+        }
           var root = document.getElementById('content');
+          wrapTables(root);
           root.querySelectorAll('pre > code.language-mermaid').forEach(function (code) {
             var div = document.createElement('div');
             div.className = 'mermaid';
